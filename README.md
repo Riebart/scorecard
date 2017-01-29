@@ -73,7 +73,7 @@ The two AWS Lambda functions called by the API implement the logic for interacti
 
 ### API Gateway
 
-The API has the following structure:
+All API resources and methods permit a request origin of `*` as this exposes an API and thus should be callable from any HTML interface. The API has the following structure:
 
 - POST @ `/flag`
   - JSON body input
