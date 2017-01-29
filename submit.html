@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title>ScoreCard Submission Page</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+    <!--<link rel="stylesheet" href="stylesheet.css" type="text/css" charset="utf-8" />-->
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-resource.js"></script>
+    <!-- This is the file that contains the API gateway endpoint and default channel name -->
+    <script src="constants.js"></script>
+    <!-- Angularjs app and controllers -->
+    <script src="submit-app.js"></script>
+</head>
+<body ng-app="submissionApp" style="text-align:center">
+    <header>
+        <!--<div id="square"></div>-->
+        <!--<img id="logo" src="assets/images/logo.svg" style="padding-left:3em; padding-right:1em;"/>-->
+        <!--<div id="main-header"><img src="assets/images/title.svg"></div>-->
+        <!--<img id="org-logo" src="assets/images/org-logo.svg"/>-->
+    </header>
+    <div id="wrapper" style="vertical-align:middle;position: absolute;top:50%;left:50%;transform:translate(-50%, -50%)">
+        <div ng-controller="submissionController" class="scores">
+            <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
+                <tr>
+                    <td style="text-align:right;"><b>Team Number:&nbsp;</b></td>
+                    <td>
+                        <input type="text"
+                            class="form-control"
+                            ng-keydown="inputKeyPressed($event)"
+                            ng-model="teamText"
+                            id="team-input"/>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align:right;"><b>Flag:&nbsp;</b></td>
+                    <td>
+                        <input type="text"
+                            class="form-control"
+                            ng-keydown="inputKeyPressed($event)"
+                            ng-model="flagText"
+                            id="flag-input"/>
+                    </td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                </tr>
+            </table>
+            <button type="button"
+                            class="form-control"
+                            ng-click="submitFlag();"
+                            ng-disabled="submitting"
+                        id="submit">Submit</button>
+            <div ng-show="submission_status == null">
+                <label style="float:center">&nbsp;</label>
+            </div>
+            <div ng-show="submission_status == 'invalid'">
+                <label style="float:center;color:darkorange">Incorrect flag</label>
+            </div>
+            <div ng-show="submission_status == 'success'">
+                <label style="float:center;color:darkseagreen">Correct flag submission successful!</label>
+            </div>
+            <div ng-show="submission_status == 'failure'">
+                <label style="float:center;color:darkred">Both team and flag fields must be filled in.</label>
+            </div>
+            <div ng-show="submission_status == 'failure_parse'">
+                <label style="float:center;color:darkred">Team must be an integer.</label>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

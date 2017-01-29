@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title>ScoreCard Dashboard</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+    <!--<link rel="stylesheet" href="stylesheet.css" type="text/css" charset="utf-8" />-->
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-resource.js"></script>
+    <!-- This is the file that contains the API gateway endpoint and default channel name -->
+    <script src="constants.js"></script>
+    <!-- Angularjs app and controllers -->
+    <script src="dashboard-app.js"></script>
+</head>
+<body ng-app="dashboardApp" style="text-align:center">
+    <header>
+        <!--<div id="square"></div>-->
+        <!--<img id="logo" src="assets/images/logo.svg" style="padding-left:3em; padding-right:1em;"/>-->
+        <!--<div id="main-header"><img src="assets/images/title.svg"></div>-->
+        <!--<img id="org-logo" src="assets/images/org-logo.svg"/>-->
+    </header>
+    <div id="wrapper" style="vertical-align:middle;position: absolute;top:50%;left:50%;transform:translate(-50%, -50%)">
+        <div ng-controller="scoreboardController" class="scores">
+            <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
+                <tr><th style="width:25%;text-align:center;">Team Number</th><th style="width:25%;text-align:center;">Score</th></tr>
+                <tr ng-repeat="(name, age) in scores">
+                    <td style="text-align:center;">{{name}}</td>
+                    <td style="text-align:center;">{{age}}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
