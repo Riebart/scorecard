@@ -103,7 +103,7 @@ def lambda_handler(event, context):
     # a cache entry, and check whether it is stale or not. If it is stale, then
     # recompute, otherwise return the cached value.
     if team in TEAM_SCORE_CACHE and \
-        TEAM_SCORE_CACHE[team][1] < (time.time() - TEAM_SCORE_CACHE['timeout']):
+        TEAM_SCORE_CACHE[team][1] > (time.time() - TEAM_SCORE_CACHE['timeout']):
         return {'Team': team, 'Score': TEAM_SCORE_CACHE[team][0]}
 
     score = 0.0
