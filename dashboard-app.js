@@ -5,17 +5,29 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
     $scope.init = function () {
         // The scores, on initialization, are an empty list.
         $scope.scores = {};
+        $scope.team_names = {};
         $scope.ScoresResource = $resource(API_ENDPOINT + "/score/:team");
     };
 
     $scope.PopulateScores = function () {
         for (i in TEAMS) {
             t = TEAMS[i];
+            team_id = null;
+            if (typeof (t) == "object") {
+                team_id = t.team_id;
+                team_name = t.team_name;
+                $scope.team_names[team_id] = team_name;
+            }
+            else {
+                team_id = t;
+                team_name = t.toString();
+                $scope.team_names[team_id] = team_name;
+            }
             // For each team, retrieve the score for that team.
             $scope.ScoresResource.get({
-                team: t.toString()
-            }, function(score) {
-                $scope.scores[score.Team] = score.Score;
+                team: team_id.toString()
+            }, function (score) {
+                $scope.scores[$scope.team_names[score.Team]] = score.Score;
             });
         }
         return true;

@@ -1,2 +1,7 @@
 var API_ENDPOINT = 'https://**********.execute-api.us-east-1.amazonaws.com/Production';
-var TEAMS = [ 1, 2, 3, 4, 5 ];
+var TEAMS = [
+    { "team_id": 1, "team_name": "Team Awesome" },
+    2,
+    { "team_id": 3, "team_name": "3.1415-rate" },
+    4, 5
+];

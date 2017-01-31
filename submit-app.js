@@ -10,11 +10,11 @@ myApp.controller('submissionController', ['$scope', '$rootScope', '$resource', '
         $scope.FlagResource = $resource(API_ENDPOINT + "/flag");
     };
 
-    $scope.inputKeyPressed = function(keyEvent) {
+    $scope.inputKeyPressed = function (keyEvent) {
         $scope.submission_status = null;
     };
 
-    $scope.submitFlag = function() {
+    $scope.submitFlag = function () {
         if (($scope.teamText == null) || ($scope.teamText == "")) {
             $scope.submission_status = 'failure';
             return false;
@@ -32,7 +32,7 @@ myApp.controller('submissionController', ['$scope', '$rootScope', '$resource', '
         $scope.FlagResource.save({
             team: parseInt($scope.teamText),
             flag: $scope.flagText
-        }, function(response) {
+        }, function (response) {
             if ('ValidFlag' in response) {
                 if (response.ValidFlag) {
                     $scope.submission_status = 'success';
