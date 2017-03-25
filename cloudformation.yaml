@@ -1,0 +1,352 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  S3Bucket:
+    Description: The bucket associated with the prefix that this stack is
+      permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
+      set to 'DynamoDB')
+    Type: String
+    Default: ''
+  S3Prefix:
+    Description: The prefix associated with the bucket that this stack is
+      permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
+      set to 'DynamoDB')
+    Type: String
+    Default: ''
+  CodeSourceBucket:
+    Description: Bucket in which to find the code for the Lambda functions.
+    Type: String
+    Default: ''
+  CodeSourceTallyObject:
+    Description: Object in which to find the zipfile for the code for the tally
+      functions.
+    Type: String
+    Default: ''
+  CodeSourceSubmitObject:
+    Description: Object in which to find the zipfile for the code for the submit
+      functions.
+    Type: String
+    Default: ''
+  KeyValueBackend:
+    Description: Which backend to use for key-value store for scorekeeping. This
+      only controls which backend is used for the Scores, not for the flag/game
+      definitions.
+    Type: String
+    Default: DynamoDB
+    ConstraintDescription: Must specify either 'DynamoDB'' or 'S3'
+    AllowedValues:
+    - DynamoDB
+    - S3
+
+Conditions:
+  PrefixEmpty: !Equals [ !Ref S3Prefix, "" ]
+  DynamoBackend: !Equals [ !Ref KeyValueBackend, DynamoDB ]
+  S3Backend: !Equals [ !Ref KeyValueBackend, S3 ]
+  TallyCodePlaceholder:
+    !Or
+    - !Equals [ !Ref CodeSourceBucket, "" ]
+    - !Equals [ !Ref CodeSourceTallyObject, "" ]
+  SubmitCodePlaceholder:
+    !Or
+    - !Equals [ !Ref CodeSourceBucket, "" ]
+    - !Equals [ !Ref CodeSourceSubmitObject, "" ]
+
+Resources:
+  FlagsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - {AttributeName: flag, AttributeType: S}
+      KeySchema:
+      - {AttributeName: flag, KeyType: HASH}
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+
+  ScoresTable:
+    Type: AWS::DynamoDB::Table
+    Condition: DynamoBackend
+    Properties:
+      AttributeDefinitions:
+      - {AttributeName: team, AttributeType: N}
+      - {AttributeName: flag, AttributeType: S}
+      KeySchema:
+      - {AttributeName: team, KeyType: HASH}
+      - {AttributeName: flag, KeyType: RANGE}
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+
+  API:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Description: API endpoint for tallying scores based on keyed flags.
+      Name: !Ref AWS::StackName
+
+  FlagResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      PathPart: flag
+      ParentId: !GetAtt API.RootResourceId
+      RestApiId: !Ref API
+  FlagPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      ResourceId: !Ref FlagResource
+      RestApiId: !Ref API
+      Integration:
+        Type: AWS
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${SubmitFunction}/invocations
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json:
+            !If
+            - S3Backend
+            - !Sub |
+                {
+                  "S3Bucket": "${S3Bucket}",
+                  "S3Prefix": "${S3Prefix}",
+                  "FlagsTable": "${FlagsTable}",
+                  "KeyValueBackend": "${KeyValueBackend}",
+                  "team": "$input.path('$.team')",
+                  "flag": "$input.path('$.flag')",
+                  "auth_key": "$input.path('$.auth_key')"
+                }
+            - !Sub |
+                {
+                  "ScoresTable": "${ScoresTable}",
+                  "FlagsTable": "${FlagsTable}",
+                  "KeyValueBackend": "${KeyValueBackend}",
+                  "team": "$input.path('$.team')",
+                  "flag": "$input.path('$.flag')",
+                  "auth_key": "$input.path('$.auth_key')"
+                }
+
+  ScoreResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      PathPart: score
+      ParentId: !GetAtt API.RootResourceId
+      RestApiId: !Ref API
+  TeamPathPart:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      PathPart: '{Team}'
+      ParentId: !Ref ScoreResource
+      RestApiId: !Ref API
+  ScoreGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+      RequestParameters:
+        method.request.path.Team: true
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      ResourceId: !Ref TeamPathPart
+      RestApiId: !Ref API
+      Integration:
+        Type: AWS
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TallyFunction}/invocations
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json:
+            !If
+            - S3Backend
+            - !Sub |
+                {
+                  "S3Bucket": "${S3Bucket}",
+                  "S3Prefix": "${S3Prefix}",
+                  "FlagsTable": "${FlagsTable}",
+                  "KeyValueBackend": "${KeyValueBackend}",
+                  "team": "$input.params('Team')"
+                }
+            - !Sub |
+                {
+                  "ScoresTable": "${ScoresTable}",
+                  "FlagsTable": "${FlagsTable}",
+                  "KeyValueBackend": "${KeyValueBackend}",
+                  "team": "$input.params('Team')"
+                }
+
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - FlagResource
+      - FlagPostMethod
+      - ScoreResource
+      - TeamPathPart
+      - ScoreGetMethod
+    Properties:
+      Description: Initial CloudFormation deployment stage
+      RestApiId: !Ref API
+      StageName: Main
+  
+  FlagPostPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - FlagPostMethod
+    Properties:
+      FunctionName: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${SubmitFunction}
+      Action: lambda:InvokeFunction
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${API}/*/POST/flag
+      Principal: apigateway.amazonaws.com
+
+  ScoreGetPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - ScoreGetMethod
+    Properties:
+      FunctionName: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TallyFunction}
+      Action: lambda:InvokeFunction
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${API}/*/GET/score/*
+      Principal: apigateway.amazonaws.com
+
+  SubmitFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - SubmitLambdaRole
+    Properties:
+      Description: Ingest a submission and update the key-value backend tables
+        appropriately.
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${SubmitLambdaRole}
+      MemorySize: "128"
+      Timeout: "5"
+      Runtime: python2.7
+      Handler: ScoreCardSubmit.lambda_handler
+      Code:
+        !If
+          - SubmitCodePlaceholder
+          - ZipFile: |
+              def handler(event, context):
+                  return True
+          - S3Bucket: !Ref CodeSourceBucket
+            S3Key: !Ref CodeSourceSubmitObject
+
+  TallyFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - TallyLambdaRole
+    Properties:
+      Description: Given a team ID, tally the score for that team from the key-value
+        backend.
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${TallyLambdaRole}
+      MemorySize: "128"
+      Timeout: "5"
+      Runtime: python2.7
+      Handler: ScoreCardTally.lambda_handler
+      Code:
+        !If
+          - TallyCodePlaceholder
+          - ZipFile: |
+              def handler(event, context):
+                  return True
+          - S3Bucket: !Ref CodeSourceBucket
+            S3Key: !Ref CodeSourceTallyObject
+
+  TallyLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyName: TallyLambdaPolicy
+          PolicyDocument:
+            Statement:
+              - !If
+                - DynamoBackend
+                - Action:
+                    - dynamodb:GetItem
+                  Effect: Allow
+                  Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ScoresTable}
+                - Action:
+                    - s3:GetObject
+                  Effect: Allow
+                  Resource:
+                    - !If
+                      - PrefixEmpty
+                      - !Sub arn:aws:s3:::${S3Bucket}
+                      - !Sub arn:aws:s3:::${S3Bucket}/${S3Prefix}
+                    - !If
+                      - PrefixEmpty
+                      - !Sub arn:aws:s3:::${S3Bucket}/*
+                      - !Sub arn:aws:s3:::${S3Bucket}/${S3Prefix}/*
+              - Action:
+                  - dynamodb:Scan
+                Effect: Allow
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FlagsTable}
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: "*"
+            Version: '2012-10-17'
+
+  SubmitLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyName: SubmitLambdaPolicy
+          PolicyDocument:
+            Statement:
+              - !If
+                - DynamoBackend
+                - Action:
+                    - dynamodb:PutItem
+                  Effect: Allow
+                  Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ScoresTable}
+                - Action:
+                    - s3:PutObject
+                  Effect: Allow
+                  Resource:
+                    - !If
+                      - PrefixEmpty
+                      - !Sub arn:aws:s3:::${S3Bucket}
+                      - !Sub arn:aws:s3:::${S3Bucket}/${S3Prefix}
+                    - !If
+                      - PrefixEmpty
+                      - !Sub arn:aws:s3:::${S3Bucket}/*
+                      - !Sub arn:aws:s3:::${S3Bucket}/${S3Prefix}/*
+              - Action:
+                  - dynamodb:Scan
+                Effect: Allow
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FlagsTable}
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: "*"
+            Version: '2012-10-17'

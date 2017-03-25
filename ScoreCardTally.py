@@ -5,16 +5,45 @@ Given a team number, tally the score of that team.
 
 import time
 import boto3
+from S3KeyValueStore import Table as S3Table
 
-DDB_RESOURCE = boto3.resource('dynamodb')
-TEAMS = DDB_RESOURCE.Table('ScoreCard-Teams')
-FLAGS = DDB_RESOURCE.Table('ScoreCard-Flags')
+# Cache the table backends, as appropriate.
+SCORES_TABLE = None
+FLAGS_TABLE = None
+
+# Team scores are only recalculated periodically to conserve costs and capacity
+# on the DynamoDB table backend (if selected) at the expense of responsiveness
+# of the scoreboard views to newly claimed flags.
+#
+# This protects the backend and potential cost of running this from abusively
+# fast refreshing dashboard clients.
 TEAM_SCORE_CACHE = {'timeout': 10}
-FLAGS_DATA = {
-    'flags': FLAGS.scan()['Items'],
-    'check_time': time.time(),
-    'check_interval': 30
-}
+
+# Flag data is only scanned from the flags DynamoDB table every 30 seconds to
+# conserve DynamoDB table capacity.
+FLAGS_DATA = {'check_interval': 30}
+
+
+# Note that there is already an awslambda infrastructure module called init()
+# and this clobbers things, so it's renamed to a private scoped function.
+def __module_init(event):
+    """
+    Initialize module-scope resources, such as caches and DynamoDB resources.
+    """
+    global SCORES_TABLE
+    global FLAGS_TABLE
+    if SCORES_TABLE is None or FLAGS_TABLE is None:
+        ddb_resource = boto3.resource('dynamodb')
+        if event['KeyValueBackend'] == 'DynamoDB':
+            SCORES_TABLE = ddb_resource.Table(event['ScoresTable'])
+        else:
+            SCORES_TABLE = S3Table(event['S3Bucket'], event['S3Prefix'],
+                                   ['flag', 'team'])
+        FLAGS_TABLE = ddb_resource.Table(event['FlagsTable'])
+
+        # Prime the pump by scanning for flags
+        FLAGS_DATA['check_time'] = time.time()
+        FLAGS_DATA['flags'] = FLAGS_TABLE.scan()['Items']
 
 
 def update_flag_data():
@@ -25,7 +54,8 @@ def update_flag_data():
     Regardless, return the current flag data.
     """
     if time.time() > (FLAGS_DATA['check_time'] + FLAGS_DATA['check_interval']):
-        FLAGS_DATA['flags'] = FLAGS.scan()['Items']
+        scan_result = FLAGS_TABLE.scan()
+        FLAGS_DATA['flags'] = scan_result.get('Items', [])
         FLAGS_DATA['check_time'] = time.time()
 
     return FLAGS_DATA['flags']
@@ -35,7 +65,7 @@ def score_flag(team, flag):
     """
     Given a team ID, and a flag DynamoDB row.
     """
-    item = TEAMS.get_item(Key={'team': team, 'flag': flag['flag']})
+    item = SCORES_TABLE.get_item(Key={'team': team, 'flag': flag['flag']})
     if 'Item' in item:
         team_flag = item['Item']
 
@@ -69,7 +99,7 @@ def score_flag(team, flag):
         return None
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, _):
     """
     Insertion point for AWS Lambda
     """
@@ -84,14 +114,14 @@ def lambda_handler(event, context):
     #   timeout information) and weight.
     # - Return the score.
 
+    __module_init(event)
     flag_data = update_flag_data()
 
-    if 'team' in event:
-        try:
-            team = int(event['team'])
-        except ValueError:
-            team = None
-    else:
+    try:
+        team = int(event['team'])
+    except ValueError:
+        team = None
+    except KeyError:
         team = None
 
     if team is None:
@@ -103,8 +133,8 @@ def lambda_handler(event, context):
     # a cache entry, and check whether it is stale or not. If it is stale, then
     # recompute, otherwise return the cached value.
     if team in TEAM_SCORE_CACHE and \
-        TEAM_SCORE_CACHE[team][1] > (time.time() - TEAM_SCORE_CACHE['timeout']):
-        return {'Team': team, 'Score': TEAM_SCORE_CACHE[team][0]}
+        TEAM_SCORE_CACHE[team]['time'] > (time.time() - TEAM_SCORE_CACHE['timeout']):
+        return {'Team': team, 'Score': TEAM_SCORE_CACHE[team]['score']}
 
     score = 0.0
     scores = []
@@ -116,5 +146,110 @@ def lambda_handler(event, context):
         if flag_score is not None:
             score += float(flag_score)
 
-    TEAM_SCORE_CACHE[team] = (score, time.time())
+    TEAM_SCORE_CACHE[team] = {'score': score, 'time': time.time()}
     return {'Team': team, 'Score': score}
+
+
+def debug_submit_flag(event):
+    """
+    Out-of-band submission of flags not using the submission module due to
+    scope-clobbering.
+    """
+    from decimal import Decimal
+    SCORES_TABLE.put_item(Item={
+        'flag': event['flag'],
+        'team': event['team'],
+        'last_seen': Decimal(repr(time.time()))
+    })
+
+
+def unit_tests(event):
+    """
+    Run unit tests against moto or other local resources.
+    """
+    global SCORES_TABLE
+    global FLAGS_TABLE
+    global TEAM_SCORE_CACHE
+    global FLAGS_DATA
+    SCORES_TABLE = None
+    FLAGS_TABLE = None
+    TEAM_SCORE_CACHE = {'timeout': 10}
+    FLAGS_DATA = {'check_interval': 30}
+
+    flags = event['Flags']
+
+    # Assert that lack of 'team' results in a ClientError
+    res = lambda_handler(event, None)
+    assert 'ClientError' in res
+    assert len(res['ClientError']) == 1
+
+    # Assert that the team must be integral (or parsable as integral)
+    event['team'] = 'abcde'
+    res = lambda_handler(event, None)
+    assert 'ClientError' in res
+    assert len(res['ClientError']) == 1
+
+    # Confirm that the team score without flags claimed is 0
+    event['team'] = 10
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 0.0}
+
+    # Get the score from the cache, when it should be the same
+    event['team'] = 10
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 0.0}
+
+    # Claim a simple durable flag, and fetch the score: SHOULD SERVE FROM CACHE
+    event['team'] = 10
+    event['flag'] = flags[0]['flag']
+    debug_submit_flag(event)
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 0.0}
+
+    # Override the team score cache to get real-time updates on scores
+    TEAM_SCORE_CACHE['timeout'] = 0
+
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 1.0}
+
+    # Override the interval for flag refreshing so that the refresh occurs
+    FLAGS_DATA['check_interval'] = 0
+
+    # A simple recovable-alive flag, 'yes' unspecified
+    event['team'] = 10
+    event['flag'] = flags[2]['flag']
+    debug_submit_flag(event)
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 4.0}
+    time.sleep(1.5 * float(flags[2]['timeout']))
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 1.0}
+
+    # A simple recovable-alive flag, 'yes' specified to TRUE
+    event['team'] = 10
+    event['flag'] = flags[4]['flag']
+    debug_submit_flag(event)
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 6.0}
+    time.sleep(1.5 * float(flags[4]['timeout']))
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 1.0}
+
+    # A recovable-alive flag with an auth key for one team, 'yes' specified to TRUE
+
+    # A simple recovable-dead flag
+    event['team'] = 10
+    event['flag'] = flags[6]['flag']
+    debug_submit_flag(event)
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 1.0}
+    time.sleep(1.5 * float(flags[6]['timeout']))
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 8.0}
+
+    # A simple durable flag without a weight
+    event['team'] = 10
+    event['flag'] = flags[-1]['flag']
+    debug_submit_flag(event)
+    res = lambda_handler(event, None)
+    assert res == {'Team': 10, 'Score': 8.0}

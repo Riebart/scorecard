@@ -55,7 +55,7 @@ The `Flags` table has a more complicated structure that stores each flag, it's a
 - `timeout` (Number)
   - Optional: If not included, then the flag is a discoverable/durable flag, otherwise it is a revocable flag.
 - `yes` (Boolean)
-  - Optional: If included for a flag without a timeout, this property is ignored. When included and set to True for a flag with a timeout then the flag is a revocable-alive flag. If it is included and set to false for a flag with a timeout then the flag is a revocable-dead flag.
+  - Optional: If included for a flag without a timeout, this property is ignored. When not included, or included and set to True for a flag with a timeout then the flag is a revocable-alive flag. If it is included and set to false for a flag with a timeout then the flag is a revocable-dead flag.
 - `auth_key` (Map)
   - A mapping of stringifications of the team IDs to arbitrary strings that represent the key that must be supplied for a team to successfully claim this flag.
 
