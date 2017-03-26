@@ -35,4 +35,6 @@ else
 fi
 
 echo "Waiting on stack operation to complete" >&2
-aws cloudformation describe-stack-resources --stack-name ScoreCard --logical-resource-id API --query StackResources[0].PhysicalResourceId --output text
+api_id=`aws cloudformation describe-stack-resources --stack-name ScoreCard --logical-resource-id API --query StackResources[0].PhysicalResourceId --output text`
+aws apigateway create-deployment --rest-api-id $api_id --stage-name Main >&2
+echo $api_id
