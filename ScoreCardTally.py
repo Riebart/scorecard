@@ -17,7 +17,7 @@ FLAGS_TABLE = None
 #
 # This protects the backend and potential cost of running this from abusively
 # fast refreshing dashboard clients.
-TEAM_SCORE_CACHE = {'timeout': 10}
+TEAM_SCORE_CACHE = {'timeout': 30}
 
 # Flag data is only scanned from the flags DynamoDB table every 30 seconds to
 # conserve DynamoDB table capacity.
@@ -114,6 +114,18 @@ def lambda_handler(event, _):
     #   timeout information) and weight.
     # - Return the score.
 
+    # If the values are in the event body, attempt to parse them as floats and
+    # update the cache objects at the global scope.
+    try:
+        TEAM_SCORE_CACHE['timeout'] = float(event['ScoreCacheLifetime'])
+    except:
+        pass
+
+    try:
+        FLAGS_DATA['check_interval'] = float(event['FlagCacheLifetime'])
+    except:
+        pass
+
     __module_init(event)
     flag_data = update_flag_data()
 
@@ -208,13 +220,13 @@ def unit_tests(event):
     assert res == {'Team': 10, 'Score': 0.0}
 
     # Override the team score cache to get real-time updates on scores
-    TEAM_SCORE_CACHE['timeout'] = 0
+    event['ScoreCacheLifetime'] = 0
 
     res = lambda_handler(event, None)
     assert res == {'Team': 10, 'Score': 1.0}
 
     # Override the interval for flag refreshing so that the refresh occurs
-    FLAGS_DATA['check_interval'] = 0
+    event['FlagCacheLifetime'] = 0
 
     # A simple recovable-alive flag, 'yes' unspecified
     event['team'] = 10

@@ -107,6 +107,17 @@ def unit_tests(bucket):
     """
     Run unit tests against moto or other local resources.
     """
+    tbl = Table("not-a-bucket", "Prefix-1", ['hkey', 'skey'])
+
+    # Confirm that an uncaught (that is, not a 404/NoSuchKey) exception is
+    # reraised.
+    exc = None
+    try:
+        tbl.get_item(Key={'hkey': '', 'skey': ''})
+    except Exception as exc:
+        pass
+    assert exc is not None
+
     tbl = Table(bucket, "Prefix-1", ['hkey', 'skey'])
 
     # Confirm that an object can be put to the table without excepting

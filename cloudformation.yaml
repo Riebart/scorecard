@@ -26,6 +26,16 @@ Parameters:
       functions.
     Type: String
     Default: ''
+  ScoreCacheLifetime:
+    Description: Duration to keep scores for a single team cached to control for
+      load on key-values store backend.
+    Type: Number
+    Default: 10
+  FlagCacheLifetime:
+    Description: Duration to keep flag configuration cached to control for load
+      on key-value store backend.
+    Type: Number
+    Default: 10
   KeyValueBackend:
     Description: Which backend to use for key-value store for scorekeeping. This
       only controls which backend is used for the Scores, not for the flag/game
@@ -119,6 +129,8 @@ Resources:
                   "S3Prefix": "${S3Prefix}",
                   "FlagsTable": "${FlagsTable}",
                   "KeyValueBackend": "${KeyValueBackend}",
+                  "ScoreCacheLifetime": "${ScoreCacheLifetime}",
+                  "FlagCacheLifetime": "${FlagCacheLifetime}",
                   "team": "$input.path('$.team')",
                   "flag": "$input.path('$.flag')",
                   "auth_key": "$input.path('$.auth_key')"
@@ -128,6 +140,8 @@ Resources:
                   "ScoresTable": "${ScoresTable}",
                   "FlagsTable": "${FlagsTable}",
                   "KeyValueBackend": "${KeyValueBackend}",
+                  "ScoreCacheLifetime": "${ScoreCacheLifetime}",
+                  "FlagCacheLifetime": "${FlagCacheLifetime}",
                   "team": "$input.path('$.team')",
                   "flag": "$input.path('$.flag')",
                   "auth_key": "$input.path('$.auth_key')"
@@ -178,6 +192,8 @@ Resources:
                   "S3Prefix": "${S3Prefix}",
                   "FlagsTable": "${FlagsTable}",
                   "KeyValueBackend": "${KeyValueBackend}",
+                  "ScoreCacheLifetime": "${ScoreCacheLifetime}",
+                  "FlagCacheLifetime": "${FlagCacheLifetime}",
                   "team": "$input.params('Team')"
                 }
             - !Sub |
@@ -185,6 +201,8 @@ Resources:
                   "ScoresTable": "${ScoresTable}",
                   "FlagsTable": "${FlagsTable}",
                   "KeyValueBackend": "${KeyValueBackend}",
+                  "ScoreCacheLifetime": "${ScoreCacheLifetime}",
+                  "FlagCacheLifetime": "${FlagCacheLifetime}",
                   "team": "$input.params('Team')"
                 }
 

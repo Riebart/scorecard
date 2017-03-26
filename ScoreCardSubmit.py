@@ -75,6 +75,13 @@ def lambda_handler(event, _):
     #  - If flag exists, insert item mapping time seen, team, and flag in the
     #    teams table, return True.
 
+    # If the values are in the event body, attempt to parse them as floats and
+    # update the cache objects at the global scope.
+    try:
+        FLAGS_DATA['check_interval'] = float(event['FlagCacheLifetime'])
+    except:
+        pass
+
     __module_init(event)
     flag_data = update_flag_data()
 
@@ -194,7 +201,7 @@ def unit_tests(event):
     assert res == {'ValidFlag': True}
 
     # Override the interval for flag refreshing so that the refresh occurs
-    FLAGS_DATA['check_interval'] = 0
+    event['FlagCacheLifetime'] = 0
 
     # A durable flag with an auth key for one team as the wrong team
     event['team'] = 1
