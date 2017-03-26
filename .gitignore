@@ -1,3 +1,4 @@
 constants.js
 .vscode/*
 htmlcov/*
+*pyc

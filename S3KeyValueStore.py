@@ -4,7 +4,7 @@ in a specific prefix. In practice, this is more performant and scales to a few
 hundred transactions per second for workloads without atomicity requirements.
 """
 import json
-import yaml
+import cPickle
 import hashlib
 
 import boto3
@@ -64,7 +64,7 @@ class Table(object):
 
         ret = dict()
         if value_object is not None:
-            ret['Item'] = yaml.load(value_object['Body'].read())
+            ret['Item'] = cPickle.loads(value_object['Body'].read())
         else:
             pass
 
@@ -98,7 +98,7 @@ class Table(object):
         self.client.put_object(
             Bucket=self.bucket,
             Key=self.prefix + '/' + object_key,
-            Body=yaml.dump(item))
+            Body=cPickle.dumps(item))
 
         return dict()
 

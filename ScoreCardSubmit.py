@@ -89,8 +89,10 @@ def lambda_handler(event, _):
     except KeyError:
         event['team'] = None
 
-    if not isinstance(event['team'], int):
-        response['ClientError'] = ['"team" key must exist and be an integer']
+    if event['team'] is None:
+        response['ClientError'] = [
+            '"team" key must exist and be integeral or parsable as integral'
+        ]
 
     if 'flag' not in event:
         if 'ClientError' in response:
@@ -169,6 +171,16 @@ def unit_tests(event):
     assert 'ClientError' in res
     assert len(res['ClientError']) == 1
 
+    # Assert that the team must be integral (or parsable as integral)
+    event['team'] = 10
+    res = lambda_handler(event, None)
+    assert 'ClientError' not in res
+
+    # Assert that the team must be integral (or parsable as integral)
+    event['team'] = '10'
+    res = lambda_handler(event, None)
+    assert 'ClientError' not in res
+
     # Attempt to claim a nonexistent flag
     event['team'] = 10
     event['flag'] = ""
@@ -184,17 +196,21 @@ def unit_tests(event):
     # Override the interval for flag refreshing so that the refresh occurs
     FLAGS_DATA['check_interval'] = 0
 
-    # A durable flag with an auth key for one team
-    event['team'] = 10
+    # A durable flag with an auth key for one team as the wrong team
+    event['team'] = 1
     event['flag'] = flags[1]['flag']
     res = lambda_handler(event, None)
     assert res == {'ValidFlag': False}
-    event['team'] = 1
+
+    # A durable flag with an auth key for one team as the right team and right key
+    event['team'] = flags[1]['auth_key'].keys()[0]
     event['flag'] = flags[1]['flag']
-    event['auth_key'] = "1"
+    event['auth_key'] = flags[1]['auth_key'][event['team']]
     res = lambda_handler(event, None)
     assert res == {'ValidFlag': True}
-    event['team'] = 1
+
+    # A durable flag with an auth key for one team as the right team with the wrong key
+    event['team'] = flags[1]['auth_key'].keys()[0]
     event['flag'] = flags[1]['flag']
     event['auth_key'] = ""
     res = lambda_handler(event, None)

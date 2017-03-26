@@ -126,7 +126,8 @@ def lambda_handler(event, _):
 
     if team is None:
         return {
-            'ClientError': ['"team" key must exist and be parsable integer']
+            'ClientError':
+            ['"team" key must exist and be integeral or parsable as integral']
         }
 
     # At this point, check to see if the score for the requested team still has
@@ -234,8 +235,6 @@ def unit_tests(event):
     time.sleep(1.5 * float(flags[4]['timeout']))
     res = lambda_handler(event, None)
     assert res == {'Team': 10, 'Score': 1.0}
-
-    # A recovable-alive flag with an auth key for one team, 'yes' specified to TRUE
 
     # A simple recovable-dead flag
     event['team'] = 10
