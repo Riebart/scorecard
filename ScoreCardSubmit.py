@@ -132,7 +132,8 @@ def lambda_handler(event, _):
 
             # Check if the auth_key provided matches the auth_key for the flag
             # for this team.
-            if event['auth_key'] != flag_item['auth_key'][str(event['team'])]:
+            if str(event['team']) not in flag_item['auth_key'] or event[
+                    'auth_key'] != flag_item['auth_key'][str(event['team'])]:
                 return {'ValidFlag': False}
 
         SCORES_TABLE.put_item(Item={
@@ -206,6 +207,13 @@ def unit_tests(event):
     # A durable flag with an auth key for one team as the wrong team
     event['team'] = 1
     event['flag'] = flags[1]['flag']
+    res = lambda_handler(event, None)
+    assert res == {'ValidFlag': False}
+
+    # A durable flag with an auth key for one team as the wrong team
+    event['team'] = 1
+    event['flag'] = flags[1]['flag']
+    event['auth_key'] = flags[1]['auth_key'][flags[1]['auth_key'].keys()[0]]
     res = lambda_handler(event, None)
     assert res == {'ValidFlag': False}
 

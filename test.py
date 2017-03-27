@@ -10,14 +10,44 @@ this uses a deployed stack for testing, and is unable to perform client
 only testing. All tests are integration tests.
 """
 
+import copy
+import time
 import uuid
 import argparse
+import traceback
 from random import randint
 from decimal import Decimal
 
 import requests
 import boto3
+from botocore.exceptions import ClientError
 from moto import mock_s3, mock_dynamodb2
+
+
+def update_stack_parameters(stack_name, parameters):
+    """
+    Perform an in-place update of a CloudFormation stack that replaces only the
+    parameters. Also deploys a new API Gateway stage to make the new parameters
+    take effect in the body mapping templates.
+    """
+    cfn_client = boto3.client('cloudformation')
+    api_client = boto3.client('apigateway')
+    try:
+        cfn_client.update_stack(
+            StackName=stack_name,
+            UsePreviousTemplate=True,
+            Parameters=parameters,
+            Capabilities=['CAPABILITY_IAM'])
+    except ClientError:
+        pass
+    else:
+        update_waiter = cfn_client.get_waiter('stack_update_complete')
+        update_waiter.wait(StackName=stack_name)
+
+    api_resource = cfn_client.describe_stack_resources(
+        StackName=stack_name,
+        LogicalResourceId='API')['StackResources'][0]['PhysicalResourceId']
+    api_client.create_deployment(restApiId=api_resource, stageName='Main')
 
 
 def integration_tests(stack_name):
@@ -26,7 +56,6 @@ def integration_tests(stack_name):
     the CloudFormation stack, adding a collection of rows to the DynamoDB table
     and attempting to claim and tally them.
     """
-    import json
     # The workflow for integration testing a live stack is as follows:
     # - Describe the stack to determine the API endpoint and Flags DDB table
     # - Populate some new flags in the DynamoDB table, tracking them for
@@ -35,69 +64,262 @@ def integration_tests(stack_name):
     #   to test claiming and tallying the team's scores.
     cfn_client = boto3.client('cloudformation')
     ddb_client = boto3.client('dynamodb')
+
+    stack_parameters = cfn_client.describe_stacks(
+        StackName=stack_name)['Stacks'][0]['Parameters']
+
+    cache_free_parameters = copy.deepcopy(stack_parameters)
+    score_cache = [
+        p for p in cache_free_parameters
+        if p['ParameterKey'] == 'ScoreCacheLifetime'
+    ][0]
+    score_cache['ParameterValue'] = '0'
+    flags_cache = [
+        p for p in cache_free_parameters
+        if p['ParameterKey'] == 'FlagCacheLifetime'
+    ][0]
+    flags_cache['ParameterValue'] = '0'
+
+    update_stack_parameters(stack_name, cache_free_parameters)
+    print "Cache parameter update complete"
+
     api_resource = cfn_client.describe_stack_resources(
-        StackName='ScoreCard',
+        StackName=stack_name,
         LogicalResourceId='API')['StackResources'][0]['PhysicalResourceId']
     flags_table_name = cfn_client.describe_stack_resources(
-        StackName='ScoreCard', LogicalResourceId='FlagsTable')[
+        StackName=stack_name, LogicalResourceId='FlagsTable')[
             'StackResources'][0]['PhysicalResourceId']
     scores_table_name = cfn_client.describe_stack_resources(
-        StackName='ScoreCard', LogicalResourceId='ScoresTable')[
+        StackName=stack_name, LogicalResourceId='ScoresTable')[
             'StackResources'][0]['PhysicalResourceId']
 
-    flags = populate_flags(flags_table_name)
+    flags = populate_flags(flags_table_name, 5.0)
 
     api_endpoint = 'https://%s.execute-api.%s.amazonaws.com/Main' % (
         api_resource, boto3.Session().region_name)
 
-    teams = [randint(10**35, 10**36) for _ in range(2)]
-
     print "Setup successful"
 
-    # Assert that a team's default score is 0
-    for team in teams:
-        resp = requests.get(url=api_endpoint + "/score/" + str(team))
-        assert resp.json() == {'Score': 0.0, 'Team': team}
+    # Cache busting is handled by using newly generated team IDs each time. This
+    # still necessitates some sleeping while we wait for the recovable flags to
+    # do their thing.
 
-    # Assert that each team cannot claim a non-existent flag
-    for team in teams:
+    flags_record = []
+
+    try:
+        # Assert that a team's default score is 0
+        for team in [randint(10**35, 10**36) for _ in range(2)]:
+            resp = requests.get(url=api_endpoint + "/score/" + str(team))
+            assert resp.json() == {'Score': 0.0, 'Team': team}
+
+        # Assert that each team cannot claim a non-existent flag
+        for team in [randint(10**35, 10**36) for _ in range(2)]:
+            record = {'team': team, 'flag': str(uuid.uuid1())}
+            flags_record.append(record)
+            resp = requests.post(
+                url=api_endpoint + "/flag",
+                json=record,
+                headers={'Content-Type': 'application/json'})
+            assert resp.json() == {'ValidFlag': False}
+
+        # Assert that each team can claim a durable simple flag.
+        for team in [randint(10**35, 10**36) for _ in range(2)]:
+            record = {'team': team, 'flag': flags[0]['flag']}
+            flags_record.append(record)
+            resp = requests.post(
+                url=api_endpoint + "/flag",
+                json=record,
+                headers={'Content-Type': 'application/json'})
+            assert resp.json() == {'ValidFlag': True}
+            resp = requests.get(url=api_endpoint + "/score/" + str(team))
+            assert resp.json() == {'Score': 1.0, 'Team': team}
+
+        # Assert that an authenticated flag can only be claimed by the right team
+        # Right team wrong key...
+        record = {
+            'team': flags[1]['auth_key'].keys()[0],
+            'auth_key': "",
+            'flag': flags[1]['flag']
+        }
+        flags_record.append(record)
         resp = requests.post(
             url=api_endpoint + "/flag",
-            json={'team': team,
-                  'flag': str(uuid.uuid1())},
+            json=record,
             headers={'Content-Type': 'application/json'})
         assert resp.json() == {'ValidFlag': False}
-
-    # Assert that each team can claim a durable simple flag.
-    for team in teams:
+        resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
+        assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+        # Right team right key...
+        record = {
+            'team': flags[1]['auth_key'].keys()[0],
+            'auth_key': flags[1]['auth_key'].values()[0],
+            'flag': flags[1]['flag']
+        }
+        flags_record.append(record)
         resp = requests.post(
             url=api_endpoint + "/flag",
-            json={'team': team,
-                  'flag': flags[0]['flag']},
+            json=record,
             headers={'Content-Type': 'application/json'})
         assert resp.json() == {'ValidFlag': True}
-        resp = requests.get(url=api_endpoint + "/score/" + str(team))
-        print resp.json()
-        assert resp.json() == {'Score': 1.0, 'Team': team}
+        resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
+        assert resp.json() == {'Score': 2.0, 'Team': int(record['team'])}
+        # Wrong team right key...
+        record = {
+            'team': randint(10**35, 10**36),
+            'auth_key': flags[1]['auth_key'].values()[0],
+            'flag': flags[1]['flag']
+        }
+        flags_record.append(record)
+        resp = requests.post(
+            url=api_endpoint + "/flag",
+            json=record,
+            headers={'Content-Type': 'application/json'})
+        assert resp.json() == {'ValidFlag': False}
+        resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
+        assert resp.json() == {'Score': 0.0, 'Team': record['team']}
+        # Wrong team wrong key...
+        record = {
+            'team': randint(10**35, 10**36),
+            'auth_key': "",
+            'flag': flags[1]['flag']
+        }
+        flags_record.append(record)
+        resp = requests.post(
+            url=api_endpoint + "/flag",
+            json=record,
+            headers={'Content-Type': 'application/json'})
+        assert resp.json() == {'ValidFlag': False}
+        resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
+        assert resp.json() == {'Score': 0.0, 'Team': record['team']}
 
-    print "Tests successful"
+        for flag_num in [2, 4]:
+            # Assert that revocable flags tally correctly only within their lifetime.
+            record = {
+                'team': randint(10**35, 10**36),
+                'flag': flags[flag_num]['flag']
+            }
+            flags_record.append(record)
+            resp = requests.post(
+                url=api_endpoint + "/flag",
+                json=record,
+                headers={'Content-Type': 'application/json'})
+            assert resp.json() == {'ValidFlag': True}
+            resp = requests.get(
+                url=api_endpoint + "/score/" + str(record['team']))
+            assert resp.json() == {
+                'Score': flag_num + 1.0,
+                'Team': int(record['team'])
+            }
+            time.sleep(1.5 * float(flags[flag_num]['timeout']))
+            resp = requests.get(
+                url=api_endpoint + "/score/" + str(record['team']))
+            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
 
-    for flag in [f['flag'] for f in flags]:
-        for team in teams:
-            ddb_client.delete_item(
-                TableName=scores_table_name,
-                Key={'flag': {
-                    'S': flag
-                },
-                     'team': {
-                         'N': str(team)
-                     }})
+            # Recovable alive flags with auth keys for the...
+            # Right team wrong key
+            record = {
+                'team': flags[flag_num + 1]['auth_key'].keys()[0],
+                'flag': flags[flag_num + 1]['flag'],
+                'auth_key': "",
+            }
+            flags_record.append(record)
+            resp = requests.post(
+                url=api_endpoint + "/flag",
+                json=record,
+                headers={'Content-Type': 'application/json'})
+            assert resp.json() == {'ValidFlag': False}
+            resp = requests.get(
+                url=api_endpoint + "/score/" + str(record['team']))
+            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+
+            # Right team right key
+            record = {
+                'team': flags[flag_num + 1]['auth_key'].keys()[0],
+                'flag': flags[flag_num + 1]['flag'],
+                'auth_key': flags[flag_num + 1]['auth_key'].values()[0],
+            }
+            flags_record.append(record)
+            resp = requests.post(
+                url=api_endpoint + "/flag",
+                json=record,
+                headers={'Content-Type': 'application/json'})
+            assert resp.json() == {'ValidFlag': True}
+            resp = requests.get(
+                url=api_endpoint + "/score/" + str(record['team']))
+            assert resp.json() == {
+                'Score': flag_num + 1 + 1.0,
+                'Team': int(record['team'])
+            }
+            time.sleep(1.5 * float(flags[flag_num + 1]['timeout']))
+            resp = requests.get(
+                url=api_endpoint + "/score/" + str(record['team']))
+            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+
+            # Wrong team right key
+            record = {
+                'team': randint(10**35, 10**36),
+                'flag': flags[flag_num + 1]['flag'],
+                'auth_key': flags[flag_num + 1]['auth_key'].values()[0],
+            }
+            flags_record.append(record)
+            resp = requests.post(
+                url=api_endpoint + "/flag",
+                json=record,
+                headers={'Content-Type': 'application/json'})
+            assert resp.json() == {'ValidFlag': False}
+            resp = requests.get(
+                url=api_endpoint + "/score/" + str(record['team']))
+            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+
+            # Wrong team wrong key
+            record = {
+                'team': randint(10**35, 10**36),
+                'flag': flags[flag_num + 1]['flag'],
+                'auth_key': "",
+            }
+            flags_record.append(record)
+            resp = requests.post(
+                url=api_endpoint + "/flag",
+                json=record,
+                headers={'Content-Type': 'application/json'})
+            assert resp.json() == {'ValidFlag': False}
+            resp = requests.get(
+                url=api_endpoint + "/score/" + str(record['team']))
+            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+
+    except Exception as e:
+        print "Tests Unsuccessful"
+        print traceback.format_exc()
+    else:
+        print "Tests successful"
+
+    for record in flags_record:
+        flag = record['flag']
+        team = record['team']
+        ddb_client.delete_item(
+            TableName=scores_table_name,
+            Key={'flag': {
+                'S': flag
+            },
+                 'team': {
+                     'N': str(team)
+                 }})
         ddb_client.delete_item(
             TableName=flags_table_name, Key={'flag': {
                 'S': flag
             }})
 
+    for flag in flags:
+        ddb_client.delete_item(
+            TableName=flags_table_name, Key={'flag': {
+                'S': flag['flag']
+            }})
+
     print "Cleanup successful"
+
+    update_stack_parameters(stack_name, stack_parameters)
+
+    print "Cache policy restoration complete"
 
 
 @mock_s3
@@ -119,7 +341,7 @@ def unit_tests():
         ScoreCardTally.unit_tests(backend())
 
 
-def populate_flags(table_name=None):
+def populate_flags(table_name=None, timeout=0.5):
     """
     Generate and populate a collection of randomly generated flags, and return
     them.
@@ -139,12 +361,12 @@ def populate_flags(table_name=None):
         # A simple recovable-alive flag, 'yes' unspecified
         {
             'flag': str(uuid.uuid1()),
-            'timeout': Decimal(0.5)
+            'timeout': Decimal(timeout)
         },
         # A recovable-alive flag with an auth key for one team, 'yes' unspecified
         {
             'flag': str(uuid.uuid1()),
-            'timeout': Decimal(0.5),
+            'timeout': Decimal(timeout),
             'auth_key': {
                 str(randint(10**35, 10**36)): "2"
             }
@@ -152,13 +374,13 @@ def populate_flags(table_name=None):
         # A simple recovable-alive flag, 'yes' specified to TRUE
         {
             'flag': str(uuid.uuid1()),
-            'timeout': Decimal(0.5),
+            'timeout': Decimal(timeout),
             'yes': True
         },
         # A recovable-alive flag with an auth key for one team, 'yes' specified to TRUE
         {
             'flag': str(uuid.uuid1()),
-            'timeout': Decimal(0.5),
+            'timeout': Decimal(timeout),
             'auth_key': {
                 str(randint(10**35, 10**36)): "2"
             },
@@ -167,13 +389,13 @@ def populate_flags(table_name=None):
         # A simple recovable-dead flag
         {
             'flag': str(uuid.uuid1()),
-            'timeout': Decimal(0.5),
+            'timeout': Decimal(timeout),
             'yes': False
         },
         # A recovable-dead flag with an auth key for one team
         {
             'flag': str(uuid.uuid1()),
-            'timeout': Decimal(0.5),
+            'timeout': Decimal(timeout),
             'auth_key': {
                 str(randint(10**35, 10**36)): "3"
             },
