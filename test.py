@@ -89,9 +89,13 @@ def integration_tests(stack_name):
     flags_table_name = cfn_client.describe_stack_resources(
         StackName=stack_name, LogicalResourceId='FlagsTable')[
             'StackResources'][0]['PhysicalResourceId']
-    scores_table_name = cfn_client.describe_stack_resources(
-        StackName=stack_name, LogicalResourceId='ScoresTable')[
-            'StackResources'][0]['PhysicalResourceId']
+
+    try:
+        scores_table_name = cfn_client.describe_stack_resources(
+            StackName=stack_name, LogicalResourceId='ScoresTable')[
+                'StackResources'][0]['PhysicalResourceId']
+    except IndexError:
+        scores_table_name = None
 
     flags = populate_flags(flags_table_name, 5.0)
 
@@ -290,20 +294,23 @@ def integration_tests(stack_name):
     except Exception as e:
         print "Tests Unsuccessful"
         print traceback.format_exc()
+        print resp
+        print resp.json()
     else:
         print "Tests successful"
 
     for record in flags_record:
         flag = record['flag']
         team = record['team']
-        ddb_client.delete_item(
-            TableName=scores_table_name,
-            Key={'flag': {
-                'S': flag
-            },
-                 'team': {
-                     'N': str(team)
-                 }})
+        if scores_table_name is not None:
+            ddb_client.delete_item(
+                TableName=scores_table_name,
+                Key={'flag': {
+                    'S': flag
+                },
+                     'team': {
+                         'N': str(team)
+                     }})
         ddb_client.delete_item(
             TableName=flags_table_name, Key={'flag': {
                 'S': flag
@@ -320,25 +327,6 @@ def integration_tests(stack_name):
     update_stack_parameters(stack_name, stack_parameters)
 
     print "Cache policy restoration complete"
-
-
-@mock_s3
-@mock_dynamodb2
-def unit_tests():
-    """
-    Run all unit tests for Lambda fuction code with the given event body template
-    """
-    import S3KeyValueStore
-    import ScoreCardSubmit
-    import ScoreCardTally
-
-    # Perform S3 key value store unit tests.
-    S3KeyValueStore.unit_tests(create_s3_bucket())
-
-    for backend in [setup_s3_backend, setup_dynamodb_backend]:
-        # Test for both the S3 and DynamoDB key-value store backends
-        ScoreCardSubmit.unit_tests(backend())
-        ScoreCardTally.unit_tests(backend())
 
 
 def populate_flags(table_name=None, timeout=0.5):
@@ -453,8 +441,8 @@ def setup_s3_backend():
     flags = populate_flags(flags_table)
 
     return {
-        'S3Bucket': s3_bucket,
-        'S3Prefix': s3_prefix,
+        'KeyValueS3Bucket': s3_bucket,
+        'KeyValueS3Prefix': s3_prefix,
         'FlagsTable': flags_table,
         'KeyValueBackend': 'S3',
         'Flags': flags
@@ -538,16 +526,7 @@ def main():
         help="""Stack name to use for deployed-stack testing. useful for testing
         integration and end-to-end configuration as moto is unable to test
         API Gateway, AWS Lambda, or IAM.""")
-    parser.add_argument(
-        "--no-unit-tests",
-        required=False,
-        action='store_true',
-        default=False,
-        help="Disable running unit tests.")
     pargs = parser.parse_args()
-
-    if not pargs.no_unit_tests:
-        unit_tests()
 
     if pargs.stack_name is not None:
         integration_tests(pargs.stack_name)

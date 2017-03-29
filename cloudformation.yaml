@@ -1,31 +1,39 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  S3Bucket:
+  KeyValueS3Bucket:
     Description: The bucket associated with the prefix that this stack is
       permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
       set to 'DynamoDB')
     Type: String
     Default: ''
-  S3Prefix:
+  KeyValueS3Prefix:
     Description: The prefix associated with the bucket that this stack is
       permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
       set to 'DynamoDB')
     Type: String
     Default: ''
+    # Prevent people from including a starting or trailing slash.
+    AllowedPattern: '(^[^/].*[^/]$|^$)'
   CodeSourceBucket:
     Description: Bucket in which to find the code for the Lambda functions.
     Type: String
     Default: ''
+    # Permit the standard S3 bucket expression or an empty bucket.
+    AllowedPattern: '(^[a-zA-Z0-9.\-_]{1,255}$|^$)'
   CodeSourceTallyObject:
     Description: Object in which to find the zipfile for the code for the tally
       functions.
     Type: String
     Default: ''
+    # Prevent people from including a starting slash.
+    AllowedPattern: '(^[^/].*$|^$)'
   CodeSourceSubmitObject:
     Description: Object in which to find the zipfile for the code for the submit
       functions.
     Type: String
     Default: ''
+    # Prevent people from including a starting slash.
+    AllowedPattern: '(^[^/].*$|^$)'
   ScoreCacheLifetime:
     Description: Duration to keep scores for a single team cached to control for
       load on key-values store backend.
@@ -48,7 +56,7 @@ Parameters:
     - S3
 
 Conditions:
-  PrefixEmpty: !Equals [ !Ref S3Prefix, "" ]
+  PrefixEmpty: !Equals [ !Ref KeyValueS3Prefix, "" ]
   DynamoBackend: !Equals [ !Ref KeyValueBackend, DynamoDB ]
   S3Backend: !Equals [ !Ref KeyValueBackend, S3 ]
   TallyCodePlaceholder:
@@ -125,8 +133,8 @@ Resources:
             - S3Backend
             - !Sub |
                 {
-                  "S3Bucket": "${S3Bucket}",
-                  "S3Prefix": "${S3Prefix}",
+                  "KeyValueS3Bucket": "${KeyValueS3Bucket}",
+                  "KeyValueS3Prefix": "${KeyValueS3Prefix}",
                   "FlagsTable": "${FlagsTable}",
                   "KeyValueBackend": "${KeyValueBackend}",
                   "ScoreCacheLifetime": "${ScoreCacheLifetime}",
@@ -188,8 +196,8 @@ Resources:
             - S3Backend
             - !Sub |
                 {
-                  "S3Bucket": "${S3Bucket}",
-                  "S3Prefix": "${S3Prefix}",
+                  "KeyValueS3Bucket": "${KeyValueS3Bucket}",
+                  "KeyValueS3Prefix": "${KeyValueS3Prefix}",
                   "FlagsTable": "${FlagsTable}",
                   "KeyValueBackend": "${KeyValueBackend}",
                   "ScoreCacheLifetime": "${ScoreCacheLifetime}",
@@ -307,12 +315,12 @@ Resources:
                   Resource:
                     - !If
                       - PrefixEmpty
-                      - !Sub arn:aws:s3:::${S3Bucket}
-                      - !Sub arn:aws:s3:::${S3Bucket}/${S3Prefix}
+                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}
+                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/${KeyValueS3Prefix}
                     - !If
                       - PrefixEmpty
-                      - !Sub arn:aws:s3:::${S3Bucket}/*
-                      - !Sub arn:aws:s3:::${S3Bucket}/${S3Prefix}/*
+                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/*
+                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/${KeyValueS3Prefix}/*
               - Action:
                   - dynamodb:Scan
                 Effect: Allow
@@ -351,12 +359,12 @@ Resources:
                   Resource:
                     - !If
                       - PrefixEmpty
-                      - !Sub arn:aws:s3:::${S3Bucket}
-                      - !Sub arn:aws:s3:::${S3Bucket}/${S3Prefix}
+                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}
+                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/${KeyValueS3Prefix}
                     - !If
                       - PrefixEmpty
-                      - !Sub arn:aws:s3:::${S3Bucket}/*
-                      - !Sub arn:aws:s3:::${S3Bucket}/${S3Prefix}/*
+                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/*
+                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/${KeyValueS3Prefix}/*
               - Action:
                   - dynamodb:Scan
                 Effect: Allow

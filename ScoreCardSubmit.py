@@ -8,7 +8,9 @@ from decimal import Decimal
 import boto3
 from S3KeyValueStore import Table as S3Table
 
+BACKEND_TYPE = None
 # Cache the table backends, as appropriate.
+BACKEND_TYPE = None
 SCORES_TABLE = None
 FLAGS_TABLE = None
 
@@ -23,15 +25,22 @@ def __module_init(event):
     """
     Initialize module-scope resources, such as caches and DynamoDB resources.
     """
+    global BACKEND_TYPE
     global SCORES_TABLE
     global FLAGS_TABLE
+
+    if BACKEND_TYPE != event['KeyValueBackend']:
+        SCORES_TABLE = None
+        FLAGS_TABLE = None
+
     if SCORES_TABLE is None or FLAGS_TABLE is None:
+        BACKEND_TYPE = event['KeyValueBackend']
         ddb_resource = boto3.resource('dynamodb')
         if event['KeyValueBackend'] == 'DynamoDB':
             SCORES_TABLE = ddb_resource.Table(event['ScoresTable'])
         else:
-            SCORES_TABLE = S3Table(event['S3Bucket'], event['S3Prefix'],
-                                   ['flag', 'team'])
+            SCORES_TABLE = S3Table(event['KeyValueS3Bucket'],
+                                   event['KeyValueS3Prefix'], ['flag', 'team'])
         FLAGS_TABLE = ddb_resource.Table(event['FlagsTable'])
 
         # Prime the pump by scanning for flags
@@ -142,91 +151,3 @@ def lambda_handler(event, _):
             'last_seen': Decimal(time.time())
         })
         return {'ValidFlag': True}
-
-
-def unit_tests(event):
-    """
-    Run unit tests against moto or other local resources.
-    """
-    global SCORES_TABLE
-    global FLAGS_TABLE
-    global FLAGS_DATA
-    SCORES_TABLE = None
-    FLAGS_TABLE = None
-    FLAGS_DATA = {'check_interval': 30}
-
-    flags = event['Flags']
-
-    # Assert that lack of 'team' AND 'flag' results in a ClientError
-    res = lambda_handler(event, None)
-    assert 'ClientError' in res
-    assert len(res['ClientError']) == 2
-
-    # Assert that lack of 'team' OR 'flag' results in a ClientError
-    event['team'] = 10
-    res = lambda_handler(event, None)
-    assert 'ClientError' in res
-    assert len(res['ClientError']) == 1
-    del event['team']
-    event['flag'] = ''
-    res = lambda_handler(event, None)
-    assert 'ClientError' in res
-    assert len(res['ClientError']) == 1
-
-    # Assert that the team must be integral (or parsable as integral)
-    event['team'] = 'abcde'
-    res = lambda_handler(event, None)
-    assert 'ClientError' in res
-    assert len(res['ClientError']) == 1
-
-    # Assert that the team must be integral (or parsable as integral)
-    event['team'] = 10
-    res = lambda_handler(event, None)
-    assert 'ClientError' not in res
-
-    # Assert that the team must be integral (or parsable as integral)
-    event['team'] = '10'
-    res = lambda_handler(event, None)
-    assert 'ClientError' not in res
-
-    # Attempt to claim a nonexistent flag
-    event['team'] = 10
-    event['flag'] = ""
-    res = lambda_handler(event, None)
-    assert res == {'ValidFlag': False}
-
-    # A simple durable flag
-    event['team'] = 10
-    event['flag'] = flags[0]['flag']
-    res = lambda_handler(event, None)
-    assert res == {'ValidFlag': True}
-
-    # Override the interval for flag refreshing so that the refresh occurs
-    event['FlagCacheLifetime'] = 0
-
-    # A durable flag with an auth key for one team as the wrong team
-    event['team'] = 1
-    event['flag'] = flags[1]['flag']
-    res = lambda_handler(event, None)
-    assert res == {'ValidFlag': False}
-
-    # A durable flag with an auth key for one team as the wrong team
-    event['team'] = 1
-    event['flag'] = flags[1]['flag']
-    event['auth_key'] = flags[1]['auth_key'][flags[1]['auth_key'].keys()[0]]
-    res = lambda_handler(event, None)
-    assert res == {'ValidFlag': False}
-
-    # A durable flag with an auth key for one team as the right team and right key
-    event['team'] = flags[1]['auth_key'].keys()[0]
-    event['flag'] = flags[1]['flag']
-    event['auth_key'] = flags[1]['auth_key'][event['team']]
-    res = lambda_handler(event, None)
-    assert res == {'ValidFlag': True}
-
-    # A durable flag with an auth key for one team as the right team with the wrong key
-    event['team'] = flags[1]['auth_key'].keys()[0]
-    event['flag'] = flags[1]['flag']
-    event['auth_key'] = ""
-    res = lambda_handler(event, None)
-    assert res == {'ValidFlag': False}

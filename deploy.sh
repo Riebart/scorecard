@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Arg1: Bucket to use for staging the code files
 # Arg2: Cloudformation stack to update. If the stack exists, then the stack will be updated, otherwise a new stack will be created witht he given name.

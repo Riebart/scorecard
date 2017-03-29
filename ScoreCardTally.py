@@ -7,6 +7,7 @@ import time
 import boto3
 from S3KeyValueStore import Table as S3Table
 
+BACKEND_TYPE = None
 # Cache the table backends, as appropriate.
 SCORES_TABLE = None
 FLAGS_TABLE = None
@@ -30,15 +31,22 @@ def __module_init(event):
     """
     Initialize module-scope resources, such as caches and DynamoDB resources.
     """
+    global BACKEND_TYPE
     global SCORES_TABLE
     global FLAGS_TABLE
+
+    if BACKEND_TYPE != event['KeyValueBackend']:
+        SCORES_TABLE = None
+        FLAGS_TABLE = None
+
     if SCORES_TABLE is None or FLAGS_TABLE is None:
+        BACKEND_TYPE = event['KeyValueBackend']
         ddb_resource = boto3.resource('dynamodb')
         if event['KeyValueBackend'] == 'DynamoDB':
             SCORES_TABLE = ddb_resource.Table(event['ScoresTable'])
         else:
-            SCORES_TABLE = S3Table(event['S3Bucket'], event['S3Prefix'],
-                                   ['flag', 'team'])
+            SCORES_TABLE = S3Table(event['KeyValueS3Bucket'],
+                                   event['KeyValueS3Prefix'], ['flag', 'team'])
         FLAGS_TABLE = ddb_resource.Table(event['FlagsTable'])
 
         # Prime the pump by scanning for flags
@@ -161,106 +169,3 @@ def lambda_handler(event, _):
 
     TEAM_SCORE_CACHE[team] = {'score': score, 'time': time.time()}
     return {'Team': team, 'Score': score}
-
-
-def debug_submit_flag(event):
-    """
-    Out-of-band submission of flags not using the submission module due to
-    scope-clobbering.
-    """
-    from decimal import Decimal
-    SCORES_TABLE.put_item(Item={
-        'flag': event['flag'],
-        'team': event['team'],
-        'last_seen': Decimal(repr(time.time()))
-    })
-
-
-def unit_tests(event):
-    """
-    Run unit tests against moto or other local resources.
-    """
-    global SCORES_TABLE
-    global FLAGS_TABLE
-    global TEAM_SCORE_CACHE
-    global FLAGS_DATA
-    SCORES_TABLE = None
-    FLAGS_TABLE = None
-    TEAM_SCORE_CACHE = {'timeout': 10}
-    FLAGS_DATA = {'check_interval': 30}
-
-    flags = event['Flags']
-
-    # Assert that lack of 'team' results in a ClientError
-    res = lambda_handler(event, None)
-    assert 'ClientError' in res
-    assert len(res['ClientError']) == 1
-
-    # Assert that the team must be integral (or parsable as integral)
-    event['team'] = 'abcde'
-    res = lambda_handler(event, None)
-    assert 'ClientError' in res
-    assert len(res['ClientError']) == 1
-
-    # Confirm that the team score without flags claimed is 0
-    event['team'] = 10
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 0.0}
-
-    # Get the score from the cache, when it should be the same
-    event['team'] = 10
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 0.0}
-
-    # Claim a simple durable flag, and fetch the score: SHOULD SERVE FROM CACHE
-    event['team'] = 10
-    event['flag'] = flags[0]['flag']
-    debug_submit_flag(event)
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 0.0}
-
-    # Override the team score cache to get real-time updates on scores
-    event['ScoreCacheLifetime'] = 0
-
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 1.0}
-
-    # Override the interval for flag refreshing so that the refresh occurs
-    event['FlagCacheLifetime'] = 0
-
-    # A simple recovable-alive flag, 'yes' unspecified
-    event['team'] = 10
-    event['flag'] = flags[2]['flag']
-    debug_submit_flag(event)
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 4.0}
-    time.sleep(1.5 * float(flags[2]['timeout']))
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 1.0}
-
-    # A simple recovable-alive flag, 'yes' specified to TRUE
-    event['team'] = 10
-    event['flag'] = flags[4]['flag']
-    debug_submit_flag(event)
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 6.0}
-    time.sleep(1.5 * float(flags[4]['timeout']))
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 1.0}
-
-    # A simple recovable-dead flag
-    event['team'] = 10
-    event['flag'] = flags[6]['flag']
-    debug_submit_flag(event)
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 1.0}
-    time.sleep(1.5 * float(flags[6]['timeout']))
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 8.0}
-
-    # A simple durable flag without a weight
-    event['team'] = 10
-    event['flag'] = flags[-1]['flag']
-    debug_submit_flag(event)
-    res = lambda_handler(event, None)
-    assert res == {'Team': 10, 'Score': 8.0}
