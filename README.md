@@ -4,11 +4,45 @@ This intends to provide a backend and partial front-end for submitting flags for
 
 Modify the `constnts.js.example` to contain your team IDs (integers) and API Gateway endpoint URL.
 
+## QuickStart: Backend
+
+To deploy, have `boto3` installed (`pip install boto3`) and AWS API credentials configured, and use the `deploy.py` script to deploy a new stack.
+
+```
+python deploy.py --stack-name ScoreCard --code-bucket cf-templates-2m24puvkjhv-us-east-1
+```
+
+This will deploy a default configuration using DynamoDB for both the flag configuration and score-keeping, with minimal capacity (1RCU and 1WCU) provisioned for each table.
+
+You can deploy an S3-based key-value backend for score keeping which provides better scaling than DynamoDB up to a few hundres TPS with truly on-demand cost.
+
+```
+python deploy.py --stack-name ScoreCard --code-bucket cf-templates-2m24puvkjhv-us-east-1 --backend-type S3 --backend-s3-bucket my-key-value-bucket --backend-s3-prefix CTF-Mar2017-ScoreCard
+```
+
+Once deployed, you can run an integration test-suite against your deployed stack to ensure that it deployed correctly.
+
+```
+python test.py --stack-name ScoreCard
+```
+
+The stack will be temporarily modified to eliminate caching for testing purposes, and restore your configured cache parameters after the tests complete (successfully or otherwise).
+
+## QuickStart: Frontend
+
+Once the backend has been deployed, copy the `constants.js.example` file to `constants.js`, and edit the `API_ENDPOINT` to match that output at the end of the `deploy.py` output. Edit the `TEAMS` list to include the list of team IDs (and optionally, team names for client-side display). Host the following files together on a webserver (or S3) and distribute the link to the dashboard and submission HTML pages:
+
+- constants.js
+- dashboard-app.js
+- submit-app.js
+- dashboard.html
+- submit.html
+
 ## Requirements and Specifications
 
 The requirements for this scoring engine, and hence the target use case, are the following.
 
-- Teams will have an ID that is an integer.
+- Teams will have an ID that is an integer, with enough integer range that collisions are unlikely and brute-forcing the range is infeasible (minimum 64-bit).
 - Flags are arbitrary strings (not binary data)
 - Flags are worth a certain number of points, stored as a floating point value that is permitted to be negative.
 - Attempts to claim a flag should return, in a timely fashion, whether or not the attempt was successful.
@@ -29,7 +63,7 @@ Obvious, but notable, properties:
 
 The frontend for this scoring system is HTML+AngularJS web interfaces that provide ways of tallying the scores for teams, as well as for teams to submit flags. These are implemented in `dashboard.html`/`dashboard-app.js` and `submit.html`/`submit-app.js` respectively, and both JavaScript applications rely on the `constants.js` file which supplies the list of team IDs for the dashboard as well as the API Gateway endpoint URL for both the dashboard and submission pages.
 
-The dashboard page will poll periodically (10 seconds is the default) for tallies of the teams defined in the `constants.js` file.
+The dashboard page will poll periodically (10 seconds is the default which is hardcoded into the `dashboard-app.js` JavaScript) for tallies of the teams defined in the `constants.js` file.
 
 The submission page does client-side parsing of the given team ID to an integer, and will alert the user if the given team ID is invalid. This depends on the accuracy of JavaScript's `parseInt()` method. When a user submits a flag feedback is provided synchronously (disabling the submission button to indicate that flag verification is in progress).
 
@@ -58,6 +92,12 @@ The `Flags` table has a more complicated structure that stores each flag, it's a
   - Optional: If included for a flag without a timeout, this property is ignored. When not included, or included and set to True for a flag with a timeout then the flag is a revocable-alive flag. If it is included and set to false for a flag with a timeout then the flag is a revocable-dead flag.
 - `auth_key` (Map)
   - A mapping of stringifications of the team IDs to arbitrary strings that represent the key that must be supplied for a team to successfully claim this flag.
+
+### Amazon S3
+
+There is an alternate score-keeping backend that uses S3 as a large key-value storage platform. This backend can be chosen through the Cloudformation template parameters (exposed nicely by the `--backend-type` option to `deploy.py`).
+
+This backend is recommended for most deployments, howver it is more opaque and offers a less intuitive interface for visibility into the scores of teams. This backend will perform better and will not incur the costs associated with unused provisioned capacity, however GET operations will be charged at standard S3 rates (as of this: 0.004USD/10000 requests).
 
 ### AWS Lambda functions
 
@@ -100,200 +140,17 @@ All API resources and methods permit a request origin of `*` as this exposes an 
   |---|---|---|---|
   | `Team` | Integer | No | The team specified in the query. |
   | `Score` | Number | No | The score of the team in the specified query. |
+  | `ClientError` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
 
-The API Gateway has the following structure Swagger+APIG Extension definition:
+## Dockerfile and Unit Tests
 
-```json
-{
-  "swagger": "2.0",
-  "info": {
-    "version": "2017-01-29T18:37:56Z",
-    "title": "ScoreCard"
-  },
-  "host": "**********.execute-api.us-east-1.amazonaws.com",
-  "basePath": "/Production",
-  "schemes": [
-    "https"
-  ],
-  "paths": {
-    "/flag": {
-      "post": {
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "200 response",
-            "schema": {
-              "$ref": "#/definitions/Empty"
-            },
-            "headers": {
-              "Access-Control-Allow-Origin": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "x-amazon-apigateway-integration": {
-          "responses": {
-            "default": {
-              "statusCode": "200",
-              "responseParameters": {
-                "method.response.header.Access-Control-Allow-Origin": "'*'"
-              }
-            }
-          },
-          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:000000000000:function:ScoreCard-Submit/invocations",
-          "passthroughBehavior": "when_no_match",
-          "httpMethod": "POST",
-          "contentHandling": "CONVERT_TO_TEXT",
-          "type": "aws"
-        }
-      },
-      "options": {
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "200 response",
-            "schema": {
-              "$ref": "#/definitions/Empty"
-            },
-            "headers": {
-              "Access-Control-Allow-Origin": {
-                "type": "string"
-              },
-              "Access-Control-Allow-Methods": {
-                "type": "string"
-              },
-              "Access-Control-Allow-Headers": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "x-amazon-apigateway-integration": {
-          "responses": {
-            "default": {
-              "statusCode": "200",
-              "responseParameters": {
-                "method.response.header.Access-Control-Allow-Methods": "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'",
-                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
-                "method.response.header.Access-Control-Allow-Origin": "'*'"
-              }
-            }
-          },
-          "requestTemplates": {
-            "application/json": "{\"statusCode\": 200}"
-          },
-          "passthroughBehavior": "when_no_match",
-          "type": "mock"
-        }
-      }
-    },
-    "/score/{Team}": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "parameters": [
-          {
-            "name": "Team",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "200 response",
-            "schema": {
-              "$ref": "#/definitions/Empty"
-            },
-            "headers": {
-              "Access-Control-Allow-Origin": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "x-amazon-apigateway-integration": {
-          "responses": {
-            "default": {
-              "statusCode": "200",
-              "responseParameters": {
-                "method.response.header.Access-Control-Allow-Origin": "'*'"
-              }
-            }
-          },
-          "requestTemplates": {
-            "application/json": "{ \"team\": \"$input.params('Team')\" }"
-          },
-          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:000000000000:function:ScoreCard-Tally/invocations",
-          "passthroughBehavior": "when_no_templates",
-          "httpMethod": "POST",
-          "contentHandling": "CONVERT_TO_TEXT",
-          "type": "aws"
-        }
-      },
-      "options": {
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "200 response",
-            "schema": {
-              "$ref": "#/definitions/Empty"
-            },
-            "headers": {
-              "Access-Control-Allow-Origin": {
-                "type": "string"
-              },
-              "Access-Control-Allow-Methods": {
-                "type": "string"
-              },
-              "Access-Control-Allow-Headers": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "x-amazon-apigateway-integration": {
-          "responses": {
-            "default": {
-              "statusCode": "200",
-              "responseParameters": {
-                "method.response.header.Access-Control-Allow-Methods": "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'",
-                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
-                "method.response.header.Access-Control-Allow-Origin": "'*'"
-              }
-            }
-          },
-          "requestTemplates": {
-            "application/json": "{\"statusCode\": 200}"
-          },
-          "passthroughBehavior": "when_no_match",
-          "type": "mock"
-        }
-      }
-    }
-  },
-  "definitions": {
-    "Empty": {
-      "type": "object",
-      "title": "Empty Schema"
-    }
-  }
-}
-```
+The Dockerfile included builds the test environment suitable for running the unit-tests which depend on the Python coverage module, as well as moto.
+
+Unit tests use the Python unittest framework.
+
+## TODO
+
+- Permit fetching scores for multiple teams in a single request
+  - Optimizes costs by reducing the number of API Gateway and lambda invocations, and amortizing overhead of lambda functions across more fetches.
+- Use Python threading to optimize the time spent fetching S3 objects for many flags and teams in a single invocation
+  - Optimizes for reducing Lambda runtime and improves repsonsiveness.
