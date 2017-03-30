@@ -23,6 +23,26 @@ stack_params="[
 {
     \"ParameterKey\": \"CodeSourceSubmitObject\",
     \"ParameterValue\": \"$prefix/ScoreCardSubmit.zip\"
+},
+{
+    \"ParameterKey\": \"KeyValueBackend\",
+    \"UsePreviousValue\": true
+},
+{
+    \"ParameterKey\": \"KeyValueS3Bucket\",
+    \"UsePreviousValue\": true
+},
+{
+    \"ParameterKey\": \"KeyValueS3Prefix\",
+    \"UsePreviousValue\": true
+},
+{
+    \"ParameterKey\": \"ScoreCacheLifetime\",
+    \"UsePreviousValue\": true
+},
+{
+    \"ParameterKey\": \"FlagCacheLifetime\",
+    \"UsePreviousValue\": true
 }]"
 
 if aws cloudformation describe-stacks --stack-name "$2" > /dev/null 2>&1

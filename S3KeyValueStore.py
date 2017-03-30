@@ -57,9 +57,11 @@ class Table(object):
             value_object = self.client.get_object(
                 Bucket=self.bucket, Key=self.prefix + '/' + object_key)
         except ClientError as exc:
-            if exc.response['Error']['Code'] == 'NoSuchKey':
+            if exc.response['Error']['Code'] == 'NoSuchKey' or exc.response[
+                    'Error']['Code'] == 'AccessDenied':
                 value_object = None
             else:
+                print self.bucket, self.prefix + '/' + object_key
                 raise exc
 
         ret = dict()

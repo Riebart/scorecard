@@ -21,7 +21,6 @@ from decimal import Decimal
 import requests
 import boto3
 from botocore.exceptions import ClientError
-from moto import mock_s3, mock_dynamodb2
 
 
 def update_stack_parameters(stack_name, parameters):
@@ -95,6 +94,10 @@ def integration_tests(stack_name):
             StackName=stack_name, LogicalResourceId='ScoresTable')[
                 'StackResources'][0]['PhysicalResourceId']
     except IndexError:
+        scores_table_name = None
+
+    if [p for p in stack_parameters if p['ParameterKey'] == 'KeyValueBackend'][
+            0]['ParameterValue'] == 'S3':
         scores_table_name = None
 
     flags = populate_flags(flags_table_name, 5.0)
