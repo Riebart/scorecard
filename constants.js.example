@@ -1,4 +1,4 @@
-var API_ENDPOINT = 'https://**********.execute-api.us-east-1.amazonaws.com/Production';
+var API_ENDPOINT = 'https://**********.execute-api.us-east-1.amazonaws.com/Main';
 var TEAMS = [
     { "team_id": 1, "team_name": "Team Awesome" },
     2,

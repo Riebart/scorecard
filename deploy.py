@@ -183,11 +183,11 @@ def main():
             "UsePreviousValue": True
         })
 
-    if stack_description is None:
-        print "Reading cloudformation template..."
-        with open("cloudformation.yaml") as fp:
-            template_body = fp.read()
+    print "Reading cloudformation template..."
+    with open("cloudformation.yaml") as fp:
+        template_body = fp.read()
 
+    if stack_description is None:
         print "Creating stack..."
         cfn_client.create_stack(
             StackName=pargs.stack_name,
@@ -199,7 +199,7 @@ def main():
         print "Updating stack..."
         cfn_client.update_stack(
             StackName=pargs.stack_name,
-            UsePreviousTemplate=True,
+            TemplateBody=template_body,
             Parameters=stack_params,
             Capabilities=['CAPABILITY_IAM'])
         waiter = cfn_client.get_waiter('stack_update_complete')

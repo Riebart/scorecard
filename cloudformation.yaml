@@ -154,6 +154,32 @@ Resources:
                   "flag": "$input.path('$.flag')",
                   "auth_key": "$input.path('$.auth_key')"
                 }
+  FlagOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      ResourceId: !Ref FlagResource
+      RestApiId: !Ref API
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationHttpMethod: OPTIONS
+        IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        Type: MOCK
+      MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
 
   ScoreResource:
     Type: AWS::ApiGateway::Resource
@@ -213,6 +239,32 @@ Resources:
                   "FlagCacheLifetime": "${FlagCacheLifetime}",
                   "team": "$input.params('Team')"
                 }
+  ScoreOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      ResourceId: !Ref TeamPathPart
+      RestApiId: !Ref API
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationHttpMethod: OPTIONS
+        IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        Type: MOCK
+      MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
 
   APIDeployment:
     Type: AWS::ApiGateway::Deployment
