@@ -151,7 +151,7 @@ All API resources and methods permit a request origin of `*` as this exposes an 
 
 - POST @ `/flag`
   - JSON body input
-  
+
   | Key | Type | Optional | Description |
   |---|---|---|---|
   | `team` | Integer | No | The team ID for the team claiming the flag. |
@@ -165,7 +165,6 @@ All API resources and methods permit a request origin of `*` as this exposes an 
   | `ValidFlag` | Boolean | No | Whether or not the flag claim was successful. If this is `true` then the flag was successfulyl claimed. |
   | `ClientError` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
 
-
 - GET @ `/score/{Team}`
   - Accepts a URL parameter, such as GET@`/score/10`, and returns the current score of the team queried.
   - JSON body return value
@@ -178,7 +177,7 @@ All API resources and methods permit a request origin of `*` as this exposes an 
 
 ### XRay
 
-AWS Xray tracing is included to provide insights into timing and performance of the portions of the code. Whwen running udner moto, there are issues with the use of the real Xray service. Since moto does not mock Xray endpoints, the solution is to use an environment variable, `MOCK_XRAY`, that, if it exists with any vale, disables submission to the Xray API. All other XrayChain.Chain member functions will funciton as normal.
+AWS Xray tracing is included to provide insights into timing and performance of various portions of the code. When running under moto, there are issues with the use of the real Xray service. Since moto does not mock Xray endpoints, the chosen solution is to use an environment variable, `MOCK_XRAY`, that, if it exists with any value, disables submission to the Xray API. All other XrayChain.Chain member functions will behave as normal.
 
 The traced data collected by Xray allows for deep insights into the timings and behaviours of the backend.
 
@@ -202,7 +201,6 @@ Individual traces can be inspected for waterfall and grouped timeline informatio
 Traces can be sorted based on latency and other properties to identify and drill down into outliers.
 
 ![Sorted traces showing outliers](/images/xray_trace-sorting.png?raw=true)
-
 
 ## Dockerfile and Unit Tests
 
