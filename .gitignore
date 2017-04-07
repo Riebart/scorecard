@@ -3,3 +3,4 @@ constants.js
 htmlcov/*
 *pyc
 .vs
+*sample*

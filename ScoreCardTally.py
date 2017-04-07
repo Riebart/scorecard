@@ -4,8 +4,10 @@ Given a team number, tally the score of that team.
 """
 
 import time
+
 import boto3
 from S3KeyValueStore import Table as S3Table
+from util import traced_lambda
 
 BACKEND_TYPE = None
 # Cache the table backends, as appropriate.
@@ -27,7 +29,7 @@ FLAGS_DATA = {'check_interval': 30}
 
 # Note that there is already an awslambda infrastructure module called init()
 # and this clobbers things, so it's renamed to a private scoped function.
-def __module_init(event):
+def __module_init(event, chain):
     """
     Initialize module-scope resources, such as caches and DynamoDB resources.
     """
@@ -36,10 +38,15 @@ def __module_init(event):
     global FLAGS_TABLE
 
     if BACKEND_TYPE != event['KeyValueBackend']:
+        print "Switching backend: %s to %s" % (BACKEND_TYPE,
+                                               event["KeyValueBackend"])
         SCORES_TABLE = None
         FLAGS_TABLE = None
 
     if SCORES_TABLE is None or FLAGS_TABLE is None:
+        swap_chain = chain.fork(False)
+        segment_id = swap_chain.log_start("BackendSwap")
+        print "Configuring backend resource connectors"
         BACKEND_TYPE = event['KeyValueBackend']
         ddb_resource = boto3.resource('dynamodb')
         if event['KeyValueBackend'] == 'DynamoDB':
@@ -48,13 +55,16 @@ def __module_init(event):
             SCORES_TABLE = S3Table(event['KeyValueS3Bucket'],
                                    event['KeyValueS3Prefix'], ['flag', 'team'])
         FLAGS_TABLE = ddb_resource.Table(event['FlagsTable'])
+        swap_chain.log_end(segment_id)
 
         # Prime the pump by scanning for flags
         FLAGS_DATA['check_time'] = time.time()
-        FLAGS_DATA['flags'] = FLAGS_TABLE.scan()['Items']
+        FLAGS_DATA['flags'] = swap_chain.trace("SwapFlagScan")(
+            FLAGS_TABLE.scan)()['Items']
+        swap_chain.flush()
 
 
-def update_flag_data():
+def update_flag_data(chain):
     """
     Check to see if the flag data should be updated from DynamoDB, and do so
     if required.
@@ -62,7 +72,10 @@ def update_flag_data():
     Regardless, return the current flag data.
     """
     if time.time() > (FLAGS_DATA['check_time'] + FLAGS_DATA['check_interval']):
-        scan_result = FLAGS_TABLE.scan()
+        update_chain = chain.fork()
+        scan_result = update_chain.trace("PeriodicFlagScan")(
+            FLAGS_TABLE.scan)()
+        update_chain.flush()
         FLAGS_DATA['flags'] = scan_result.get('Items', [])
         FLAGS_DATA['check_time'] = time.time()
 
@@ -107,7 +120,8 @@ def score_flag(team, flag):
         return None
 
 
-def lambda_handler(event, _):
+@traced_lambda("ScorecardTally")
+def lambda_handler(event, _, chain=None):
     """
     Insertion point for AWS Lambda
     """
@@ -134,8 +148,9 @@ def lambda_handler(event, _):
     except:
         pass
 
-    __module_init(event)
-    flag_data = update_flag_data()
+    chain.trace_associated("ModuleInit")(__module_init)(event, chain)
+    flag_data = chain.trace_associated("FlagDataUpdate")(update_flag_data)(
+        chain)
 
     try:
         team = int(event['team'])
@@ -155,17 +170,33 @@ def lambda_handler(event, _):
     # recompute, otherwise return the cached value.
     if team in TEAM_SCORE_CACHE and \
         TEAM_SCORE_CACHE[team]['time'] > (time.time() - TEAM_SCORE_CACHE['timeout']):
-        return {'Team': team, 'Score': TEAM_SCORE_CACHE[team]['score']}
+        return {
+            'Team': str(team),
+            'Score': TEAM_SCORE_CACHE[team]['score'],
+            "annotations": {
+                "Cache": "Hit"
+            }
+        }
 
     score = 0.0
     scores = []
 
+    segment_id = chain.log_start("ScoreCalculation")
+    score_chain = chain.fork()
     for flag in flag_data:
         # For each flag DDB row, try to score each flag for the team.
-        flag_score = score_flag(team, flag)
+        flag_score = score_chain.trace("ScoreFlag")(score_flag)(team, flag)
         scores.append([flag['flag'], flag_score])
         if flag_score is not None:
             score += float(flag_score)
+    chain.log_end(segment_id)
+    score_chain.flush()
 
     TEAM_SCORE_CACHE[team] = {'score': score, 'time': time.time()}
-    return {'Team': str(team), 'Score': score}
+    return {
+        'Team': str(team),
+        'Score': score,
+        "annotations": {
+            "Cache": "Miss"
+        }
+    }

@@ -73,10 +73,12 @@ def main():
                 exit(2)
 
     print "Building code zip files for deployment..."
-    tally_code = (str(uuid.uuid1()),
-                  zip_files(["ScoreCardTally.py", "S3KeyValueStore.py"]))
-    submit_code = (str(uuid.uuid1()),
-                   zip_files(["ScoreCardSubmit.py", "S3KeyValueStore.py"]))
+    tally_code = (str(uuid.uuid1()), zip_files(
+        ["ScoreCardTally.py", "S3KeyValueStore.py", "XrayChain.py",
+         "util.py"]))
+    submit_code = (str(uuid.uuid1()), zip_files([
+        "ScoreCardSubmit.py", "S3KeyValueStore.py", "XrayChain.py", "util.py"
+    ]))
 
     print "Uploading code zip files to S3 bucke (%s)..." % pargs.code_bucket
     s3_client = boto3.client("s3")

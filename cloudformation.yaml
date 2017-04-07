@@ -38,12 +38,12 @@ Parameters:
     Description: Duration to keep scores for a single team cached to control for
       load on key-values store backend.
     Type: Number
-    Default: 10
+    Default: 30
   FlagCacheLifetime:
     Description: Duration to keep flag configuration cached to control for load
       on key-value store backend.
     Type: Number
-    Default: 10
+    Default: 600
   KeyValueBackend:
     Description: Which backend to use for key-value store for scorekeeping. This
       only controls which backend is used for the Scores, not for the flag/game
@@ -378,6 +378,10 @@ Resources:
                 Effect: Allow
                 Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FlagsTable}
               - Action:
+                  - xray:PutTraceSegments
+                Effect: Allow
+                Resource: '*'
+              - Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
@@ -421,6 +425,10 @@ Resources:
                   - dynamodb:Scan
                 Effect: Allow
                 Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FlagsTable}
+              - Action:
+                  - xray:PutTraceSegments
+                Effect: Allow
+                Resource: '*'
               - Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream

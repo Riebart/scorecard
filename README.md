@@ -20,15 +20,33 @@ You can deploy an S3-based key-value backend for score keeping which provides be
 python deploy.py --stack-name ScoreCard --code-bucket cf-templates-2m24puvkjhv-us-east-1 --backend-type S3 --backend-s3-bucket my-key-value-bucket --backend-s3-prefix CTF-Mar2017-ScoreCard
 ```
 
-### Testing
+### Unit Testing
+
+A collection local unit tests that use moto and are run under coverage with branch coverage tracking are included and can be run with:
+
+```bash
+MOCK_XRAY=TRUE bash test.sh
+```
+
+You can get coverage html output with:
+
+```bash
+MOCK_XRAY=TRUE bash test.sh tar -cf - htmlcov | tar -xf -
+```
+
+See the **Xray** section for details on the `MOCK_XRAY=TRUE` environment variable.
+
+### Live Integration Testing
 
 Once deployed, you can run an integration test-suite against your deployed stack to ensure that it deployed correctly.
 
 ```bash
-python test.py --stack-name ScoreCard
+MOCK_XRAY=TRUE python test.py --stack-name ScoreCard
 ```
 
 The stack will be temporarily modified to eliminate caching for testing purposes, and restore your configured cache parameters after the tests complete (successfully or otherwise).
+
+See the **Xray** section for details on the `MOCK_XRAY=TRUE` environment variable.
 
 **Note**: Only items created in DynamoDB are cleaned up. When an S3 backend for score data is chosen then the associated objects that are created by the API backend in S3 are *not* cleaned up and will reamin.
 
@@ -157,6 +175,34 @@ All API resources and methods permit a request origin of `*` as this exposes an 
   | `Team` | Integer | No | The team specified in the query. |
   | `Score` | Number | No | The score of the team in the specified query. |
   | `ClientError` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
+
+### XRay
+
+AWS Xray tracing is included to provide insights into timing and performance of the portions of the code. Whwen running udner moto, there are issues with the use of the real Xray service. Since moto does not mock Xray endpoints, the solution is to use an environment variable, `MOCK_XRAY`, that, if it exists with any vale, disables submission to the Xray API. All other XrayChain.Chain member functions will funciton as normal.
+
+The traced data collected by Xray allows for deep insights into the timings and behaviours of the backend.
+
+The traced data can be aggregated by the Xray web console into a service map that shows the latencies and connections of the various computing steps.
+
+![Xray Service Map](/images/xray_service-map.png?raw=true)
+
+The traces can be filtered by annotations to show only selected projections and filtered slices of the traces to identify performance in various cases. Current annotations supported are:
+
+- `Cache` is either `Hit` or `Miss`, and represents whether a score tally query hit or missed the in-memory lambda cache.
+- `BackendType` is either `DynamoDB` or `S3`.
+
+![Timings for cache hits](/images/xray_cache-hit.png?raw=true)
+![Timings for cache misses](/images/xray_cache-miss.png?raw=true)
+
+Individual traces can be inspected for waterfall and grouped timeline information.
+
+![Waterfall timeline for a tally operation](/images/xray_tally-timeline.png?raw=true)
+![Waterfall timeline for a submit operation](/images/xray_submit-timeline.png?raw=true)
+
+Traces can be sorted based on latency and other properties to identify and drill down into outliers.
+
+![Sorted traces showing outliers](/images/xray_trace-sorting.png?raw=true)
+
 
 ## Dockerfile and Unit Tests
 

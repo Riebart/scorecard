@@ -2,6 +2,7 @@
 """
 Unit tests for the submission logic
 """
+import copy
 import time
 import uuid
 import unittest
@@ -228,13 +229,13 @@ class MotoTest(unittest.TestCase):
         """
         Cofirm that the submission backend switches when different events are provided.
         """
-        self.ddb_event['team'] = 10
+        self.ddb_event['team'] = str(10)
         self.ddb_event['flag'] = ''
         ScoreCardSubmit.lambda_handler(self.ddb_event, None)
         assert ScoreCardSubmit.BACKEND_TYPE == "DynamoDB"
         assert not isinstance(ScoreCardSubmit.SCORES_TABLE,
                               type(ScoreCardSubmit.S3Table))
-        self.s3_event['team'] = 10
+        self.s3_event['team'] = str(10)
         self.s3_event['flag'] = ''
         ScoreCardSubmit.lambda_handler(self.s3_event, None)
         assert ScoreCardSubmit.BACKEND_TYPE == "S3"
@@ -250,7 +251,7 @@ class MotoTest(unittest.TestCase):
         Assert that lack of 'team' AND 'flag' results in a ClientError with two errors
         """
         for event in [self.ddb_event, self.s3_event]:
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert 'ClientError' in res
             assert len(res['ClientError']) == 2
 
@@ -259,13 +260,13 @@ class MotoTest(unittest.TestCase):
         Assert that lack of 'team' OR 'flag' results in a ClientError
         """
         for event in [self.ddb_event, self.s3_event]:
-            event['team'] = 10
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            event['team'] = str(10)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert 'ClientError' in res
             assert len(res['ClientError']) == 1
             del event['team']
             event['flag'] = ''
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert 'ClientError' in res
             assert len(res['ClientError']) == 1
 
@@ -276,7 +277,7 @@ class MotoTest(unittest.TestCase):
         for event in [self.ddb_event, self.s3_event]:
             event['team'] = 'abcde'
             event['flag'] = ''
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert 'ClientError' in res
             assert len(res['ClientError']) == 1
 
@@ -285,9 +286,9 @@ class MotoTest(unittest.TestCase):
         Assert that the team can be integral
         """
         for event in [self.ddb_event, self.s3_event]:
-            event['team'] = 10
+            event['team'] = str(10)
             event['flag'] = ''
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert 'ClientError' not in res
 
     def test_integral_string_team(self):
@@ -297,7 +298,7 @@ class MotoTest(unittest.TestCase):
         for event in [self.ddb_event, self.s3_event]:
             event['team'] = '10'
             event['flag'] = ''
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert 'ClientError' not in res
 
     def test_invalid_flag(self):
@@ -305,9 +306,9 @@ class MotoTest(unittest.TestCase):
         Attempt to claim a nonexistent flag
         """
         for event in [self.ddb_event, self.s3_event]:
-            event['team'] = 10
+            event['team'] = str(10)
             event['flag'] = ""
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert res == {'ValidFlag': False}
 
     def test_durable_flag(self):
@@ -316,11 +317,11 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[0]['flag']
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert res == {'ValidFlag': True}
-            res = ScoreCardTally.lambda_handler(event, None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 1.0}
 
     def test_score_cache_lifetime_precision(self):
@@ -332,17 +333,19 @@ class MotoTest(unittest.TestCase):
                 reload(ScoreCardSubmit)
                 reload(ScoreCardTally)
                 flags = event['Flags']
-                event['team'] = randint(10**35, 10**36)
+                event['team'] = str(randint(10**35, 10**36))
                 event['flag'] = flags[0]['flag']
                 event['ScoreCacheLifetime'] = cache_lifetime
                 t0 = time.time()
-                res = ScoreCardTally.lambda_handler(event, None)
+                res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
                 assert res == {'Team': event['team'], 'Score': 0.0}
-                res = ScoreCardSubmit.lambda_handler(event, None)
+                res = ScoreCardSubmit.lambda_handler(
+                    copy.deepcopy(event), None)
                 assert res == {'ValidFlag': True}
                 while True:
                     time.sleep(0.05)
-                    res = ScoreCardTally.lambda_handler(event, None)
+                    res = ScoreCardTally.lambda_handler(
+                        copy.deepcopy(event), None)
                     if res['Score'] != 0:
                         break
                 cache_delay = time.time() - t0
@@ -361,7 +364,7 @@ class MotoTest(unittest.TestCase):
                 reload(ScoreCardTally)
                 flag = str(uuid.uuid1())
 
-                event['team'] = randint(10**35, 10**36)
+                event['team'] = str(randint(10**35, 10**36))
                 event['flag'] = flag
                 event['FlagCacheLifetime'] = cache_lifetime
                 event['ScoreCacheLifetime'] = 0
@@ -371,20 +374,22 @@ class MotoTest(unittest.TestCase):
                 # Put the flag into the Flags table.
                 # Spin, submitting and tallying until the flag registers, and the score registers
                 t0 = time.time()
-                res = ScoreCardTally.lambda_handler(event, None)
+                res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
                 assert res == {'Team': event['team'], 'Score': 0.0}
-                res = ScoreCardSubmit.lambda_handler(event, None)
+                res = ScoreCardSubmit.lambda_handler(
+                    copy.deepcopy(event), None)
                 assert res == {'ValidFlag': False}
 
                 tbl.put_item(Item={'flag': flag, 'weight': Decimal(1)})
 
                 while True:
                     time.sleep(0.05)
-                    res = ScoreCardSubmit.lambda_handler(event, None)
+                    res = ScoreCardSubmit.lambda_handler(
+                        copy.deepcopy(event), None)
                     if res['ValidFlag']:
                         break
 
-                res = ScoreCardTally.lambda_handler(event, None)
+                res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
                 assert res == {'Team': event['team'], 'Score': 1.0}
 
                 cache_delay = time.time() - t0
@@ -397,9 +402,9 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[1]['flag']
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert res == {'ValidFlag': False}
 
     def test_auth_flag2(self):
@@ -408,10 +413,10 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[1]['flag']
             event['auth_key'] = str(uuid.uuid1())
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert res == {'ValidFlag': False}
 
     def test_auth_flag3(self):
@@ -420,11 +425,11 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[1]['flag']
             event['auth_key'] = flags[1]['auth_key'][flags[1]['auth_key']
                                                      .keys()[0]]
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert res == {'ValidFlag': False}
 
     def test_auth_flag4(self):
@@ -433,10 +438,10 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = flags[1]['auth_key'].keys()[0]
+            event['team'] = str(flags[1]['auth_key'].keys()[0])
             event['flag'] = flags[1]['flag']
             event['auth_key'] = flags[1]['auth_key'][event['team']]
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert res == {'ValidFlag': True}
 
     def test_auth_flag5(self):
@@ -446,23 +451,23 @@ class MotoTest(unittest.TestCase):
         for event in [self.ddb_event, self.s3_event]:
             # A durable flag with an auth key for one team as the right team with the wrong key
             flags = event['Flags']
-            event['team'] = flags[1]['auth_key'].keys()[0]
+            event['team'] = str(flags[1]['auth_key'].keys()[0])
             event['flag'] = flags[1]['flag']
             event['auth_key'] = str(uuid.uuid1())
-            res = ScoreCardSubmit.lambda_handler(event, None)
+            res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             assert res == {'ValidFlag': False}
 
     def test_tally_backend_swap(self):
         """
         Cofirm that the submission backend switches when different events are provided.
         """
-        self.ddb_event['team'] = 10
+        self.ddb_event['team'] = str(10)
         self.ddb_event['flag'] = ''
         ScoreCardTally.lambda_handler(self.ddb_event, None)
         assert ScoreCardTally.BACKEND_TYPE == "DynamoDB"
         assert not isinstance(ScoreCardTally.SCORES_TABLE,
                               type(ScoreCardTally.S3Table))
-        self.s3_event['team'] = 10
+        self.s3_event['team'] = str(10)
         self.s3_event['flag'] = ''
         ScoreCardTally.lambda_handler(self.s3_event, None)
         assert ScoreCardTally.BACKEND_TYPE == "S3"
@@ -477,7 +482,7 @@ class MotoTest(unittest.TestCase):
         Assert that lack of 'team' results in a ClientError
         """
         for event in [self.ddb_event, self.s3_event]:
-            res = ScoreCardTally.lambda_handler(event, None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert 'ClientError' in res
             assert len(res['ClientError']) == 1
 
@@ -487,7 +492,7 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             event['team'] = 'abcde'
-            res = ScoreCardTally.lambda_handler(event, None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert 'ClientError' in res
             assert len(res['ClientError']) == 1
 
@@ -496,8 +501,8 @@ class MotoTest(unittest.TestCase):
         Confirm that the team score without flags claimed is 0
         """
         for event in [self.ddb_event, self.s3_event]:
-            event['team'] = randint(10**35, 10**36)
-            res = ScoreCardTally.lambda_handler(event, None)
+            event['team'] = str(randint(10**35, 10**36))
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 0.0}
 
     def test_tally_simple_cached(self):
@@ -506,19 +511,19 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[0]['flag']
             event['ScoreCacheLifetime'] = 10
-            res = ScoreCardTally.lambda_handler(event, None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 0.0}
-            ScoreCardSubmit.lambda_handler(event, None)
-            res = ScoreCardTally.lambda_handler(event, None)
+            ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 0.0}
 
             # Override the team score cache to get real-time updates on scores
             event['ScoreCacheLifetime'] = 0
 
-            res = ScoreCardTally.lambda_handler(event, None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 1.0}
 
     def test_tally_revocable_alive1(self):
@@ -527,14 +532,14 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[2]['flag']
             event['ScoreCacheLifetime'] = 0
-            ScoreCardSubmit.lambda_handler(event, None)
-            res = ScoreCardTally.lambda_handler(event, None)
+            ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 3.0}
             time.sleep(1.5 * float(flags[2]['timeout']))
-            res = ScoreCardTally.lambda_handler(event, None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 0.0}
 
     def test_tally_revocable_alive2(self):
@@ -543,14 +548,14 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[4]['flag']
             event['ScoreCacheLifetime'] = 0
-            ScoreCardSubmit.lambda_handler(event, None)
-            res = ScoreCardTally.lambda_handler(event, None)
+            ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 5.0}
             time.sleep(1.5 * float(flags[4]['timeout']))
-            res = ScoreCardTally.lambda_handler(event, None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 0.0}
 
     def test_tally_revocable_dead1(self):
@@ -559,14 +564,14 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[6]['flag']
             event['ScoreCacheLifetime'] = 0
-            ScoreCardSubmit.lambda_handler(event, None)
-            res = ScoreCardTally.lambda_handler(event, None)
+            ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 0.0}
             time.sleep(1.5 * float(flags[6]['timeout']))
-            res = ScoreCardTally.lambda_handler(event, None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 7.0}
 
     def test_unweighted_flag(self):
@@ -575,11 +580,11 @@ class MotoTest(unittest.TestCase):
         """
         for event in [self.ddb_event, self.s3_event]:
             flags = event['Flags']
-            event['team'] = randint(10**35, 10**36)
+            event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[-1]['flag']
             event['ScoreCacheLifetime'] = 0
-            ScoreCardSubmit.lambda_handler(event, None)
-            res = ScoreCardTally.lambda_handler(event, None)
+            ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
+            res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 0.0}
 
 

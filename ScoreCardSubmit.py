@@ -6,7 +6,9 @@ Ingest a flag and update the DynamoDB table accordingly.
 import time
 from decimal import Decimal
 import boto3
+
 from S3KeyValueStore import Table as S3Table
+from util import traced_lambda
 
 BACKEND_TYPE = None
 # Cache the table backends, as appropriate.
@@ -21,7 +23,7 @@ FLAGS_DATA = {'check_interval': 30}
 
 # Note that there is already an awslambda infrastructure module called init()
 # and this clobbers things, so it's renamed to a private scoped function.
-def __module_init(event):
+def __module_init(event, chain):
     """
     Initialize module-scope resources, such as caches and DynamoDB resources.
     """
@@ -30,10 +32,15 @@ def __module_init(event):
     global FLAGS_TABLE
 
     if BACKEND_TYPE != event['KeyValueBackend']:
+        print "Switching backend: %s to %s" % (BACKEND_TYPE,
+                                               event["KeyValueBackend"])
         SCORES_TABLE = None
         FLAGS_TABLE = None
 
     if SCORES_TABLE is None or FLAGS_TABLE is None:
+        swap_chain = chain.fork(False)
+        segment_id = swap_chain.log_start("BackendSwap")
+        print "Configuring backend resource connectors"
         BACKEND_TYPE = event['KeyValueBackend']
         ddb_resource = boto3.resource('dynamodb')
         if event['KeyValueBackend'] == 'DynamoDB':
@@ -42,13 +49,16 @@ def __module_init(event):
             SCORES_TABLE = S3Table(event['KeyValueS3Bucket'],
                                    event['KeyValueS3Prefix'], ['flag', 'team'])
         FLAGS_TABLE = ddb_resource.Table(event['FlagsTable'])
+        swap_chain.log_end(segment_id)
 
         # Prime the pump by scanning for flags
         FLAGS_DATA['check_time'] = time.time()
-        FLAGS_DATA['flags'] = FLAGS_TABLE.scan()['Items']
+        FLAGS_DATA['flags'] = swap_chain.trace("SwapFlagScan")(
+            FLAGS_TABLE.scan)()['Items']
+        swap_chain.flush()
 
 
-def update_flag_data():
+def update_flag_data(chain):
     """
     Check to see if the flag data should be updated from DynamoDB, and do so
     if required.
@@ -56,16 +66,18 @@ def update_flag_data():
     Regardless, return the current flag data.
     """
     if time.time() > (FLAGS_DATA['check_time'] + FLAGS_DATA['check_interval']):
-        scan_result = FLAGS_TABLE.scan()
+        update_chain = chain.fork()
+        scan_result = update_chain.trace("PeriodicFlagScan")(
+            FLAGS_TABLE.scan)()
+        update_chain.flush()
         FLAGS_DATA['flags'] = scan_result.get('Items', [])
         FLAGS_DATA['check_time'] = time.time()
-    else:
-        pass
 
     return FLAGS_DATA['flags']
 
 
-def lambda_handler(event, _):
+@traced_lambda("ScorecardSubmit")
+def lambda_handler(event, _, chain=None):
     """
     Insertion point for AWS Lambda
     """
@@ -91,8 +103,9 @@ def lambda_handler(event, _):
     except:
         pass
 
-    __module_init(event)
-    flag_data = update_flag_data()
+    chain.trace_associated("ModuleInit")(__module_init)(event, chain)
+    flag_data = chain.trace_associated("FlagDataUpdate")(update_flag_data)(
+        chain)
 
     # Validate input format
     response = dict()
@@ -145,9 +158,12 @@ def lambda_handler(event, _):
                     'auth_key'] != flag_item['auth_key'][str(event['team'])]:
                 return {'ValidFlag': False}
 
-        SCORES_TABLE.put_item(Item={
-            'team': event['team'],
-            'flag': event['flag'],
-            'last_seen': Decimal(time.time())
+        chain.trace("FlagSubmit")(SCORES_TABLE.put_item)(Item={
+            'team':
+            event['team'],
+            'flag':
+            event['flag'],
+            'last_seen':
+            Decimal(time.time())
         })
         return {'ValidFlag': True}

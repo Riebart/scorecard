@@ -113,7 +113,11 @@ def main():
 
     print "Claiming flags for teams and confiming scores"
     for team in teams:
-        claimed_flags = sample(flags, randint(0, len(flags) - 1))
+        if len(flags) > 1:
+            claimed_flags = sample(flags, randint(0, len(flags)))
+        else:
+            claimed_flags = flags
+
         score = 0
         for flag in claimed_flags:
             score += flag[1]
