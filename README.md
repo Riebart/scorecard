@@ -8,7 +8,7 @@ Modify the `constnts.js.example` to contain your team IDs (integers) and API Gat
 
 To deploy, have `boto3` installed (`pip install boto3`) and AWS API credentials configured, and use the `deploy.py` script to deploy a new stack.
 
-```
+```bash
 python deploy.py --stack-name ScoreCard --code-bucket cf-templates-2m24puvkjhv-us-east-1
 ```
 
@@ -16,17 +16,33 @@ This will deploy a default configuration using DynamoDB for both the flag config
 
 You can deploy an S3-based key-value backend for score keeping which provides better scaling than DynamoDB up to a few hundres TPS with truly on-demand cost.
 
-```
+```bash
 python deploy.py --stack-name ScoreCard --code-bucket cf-templates-2m24puvkjhv-us-east-1 --backend-type S3 --backend-s3-bucket my-key-value-bucket --backend-s3-prefix CTF-Mar2017-ScoreCard
 ```
 
+### Testing
+
 Once deployed, you can run an integration test-suite against your deployed stack to ensure that it deployed correctly.
 
-```
+```bash
 python test.py --stack-name ScoreCard
 ```
 
 The stack will be temporarily modified to eliminate caching for testing purposes, and restore your configured cache parameters after the tests complete (successfully or otherwise).
+
+**Note**: Only items created in DynamoDB are cleaned up. When an S3 backend for score data is chosen then the associated objects that are created by the API backend in S3 are *not* cleaned up and will reamin.
+
+### Sample Data
+
+Once a stack is deployed, you can use the `sample_game.py` script to generate and insert random simple sample data into the live stack. It will output log messages to stderr, and JSON lines to stdout that indicate the team ID and names, the flag IDs and weights, and the teams and scores. While claiming flags, the script also asserts that the live stack is reporting the correct score for each team.
+
+```bash
+python sample_game.py --stack-name ScoreCard
+```
+
+This leaves the stack with data in it, unlike the integration testing script which removes all data that was inserted into the DynamoDB tables.
+
+This will also output a new constants.js file named as `constants.js.sample_{StackName}`.
 
 ## QuickStart: Frontend
 

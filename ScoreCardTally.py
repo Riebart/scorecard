@@ -168,4 +168,4 @@ def lambda_handler(event, _):
             score += float(flag_score)
 
     TEAM_SCORE_CACHE[team] = {'score': score, 'time': time.time()}
-    return {'Team': team, 'Score': score}
+    return {'Team': str(team), 'Score': score}
