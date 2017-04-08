@@ -54,6 +54,14 @@ Parameters:
     AllowedValues:
     - DynamoDB
     - S3
+  XrayTraceProbability:
+    Description: The probability that an event will be traced via Xray, expressed
+      as a floating point value in [0, 1].
+    MaxValue: 1
+    MinValue: 0
+    Type: Number
+    Default: 0.01
+    ConstraintDescription: Value must be a probability, and thus in the range [0, 1]
 
 Conditions:
   PrefixEmpty: !Equals [ !Ref KeyValueS3Prefix, "" ]
@@ -309,6 +317,9 @@ Resources:
       Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${SubmitLambdaRole}
       MemorySize: "128"
       Timeout: "5"
+      Environment:
+        Variables:
+          XrayTraceProbability: !Ref XrayTraceProbability
       Runtime: python2.7
       Handler: ScoreCardSubmit.lambda_handler
       Code:
@@ -330,6 +341,9 @@ Resources:
       Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${TallyLambdaRole}
       MemorySize: "128"
       Timeout: "5"
+      Environment:
+        Variables:
+          XrayTraceProbability: !Ref XrayTraceProbability
       Runtime: python2.7
       Handler: ScoreCardTally.lambda_handler
       Code:

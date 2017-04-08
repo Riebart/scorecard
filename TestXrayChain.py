@@ -2,10 +2,6 @@
 Run unit tests against the Xray chain code without submitting to AwS.
 """
 
-import os
-
-os.environ["MOCK_XRAY"] = "TRUE"
-
 import unittest
 import XrayChain
 
@@ -15,10 +11,10 @@ class XrayChainTests(unittest.TestCase):
         """
         Ensure that you can't fork() from a chain with no messages.
         """
-        chain = XrayChain.Chain()
+        chain = XrayChain.Chain(mock=True)
         exc = None
         try:
-            child = chain.fork()
+            chain.fork_subsegment()
         except RuntimeError as exc:
             pass
         assert exc is not None
@@ -27,11 +23,11 @@ class XrayChainTests(unittest.TestCase):
         """
         Ensure that a fork has the right parent.
         """
-        chain = XrayChain.Chain()
+        chain = XrayChain.Chain(mock=True)
         segment_id = chain.log(0, 1, "RootEvent")
-        child = chain.fork(True)
+        child = chain.fork_subsegment()
         assert child.parent_id == segment_id
-        child = chain.fork(False)
+        child = chain.fork_root()
         assert child.parent_id == segment_id
 
 

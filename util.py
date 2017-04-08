@@ -3,6 +3,8 @@ A collection of functions and utilities shared across submission and tally
 functions.
 """
 
+import os
+from random import random
 from functools import wraps
 from XrayChain import Chain as XrayChain
 
@@ -19,9 +21,22 @@ def traced_lambda(name):
         def __wrapper(*args):
             event = args[0]
             context = args[1]
-            root_chain = XrayChain()
+
+            # To decide whether or not to trace this call (for real),
+            # use the OS environment variable (choosing 0.0 if the )
+            try:
+                sample_probability = float(
+                    os.environ.get("XraySampleProbability", 0.0))
+            except ValueError:
+                sample_probability = 0.0
+
+            # mock the Xray API calls if and only if the random() value is
+            # NOT less than the sample probability.
+            mock = random() >= sample_probability
+
+            root_chain = XrayChain(mock=mock)
             segment_id = root_chain.log_start(name=name)
-            task_chain = root_chain.fork(False)
+            task_chain = root_chain.fork_root()
             ret = target(*(args + (task_chain, )))
             if "team" in args[0]:
                 http = {

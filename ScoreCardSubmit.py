@@ -32,15 +32,15 @@ def __module_init(event, chain):
     global FLAGS_TABLE
 
     if BACKEND_TYPE != event['KeyValueBackend']:
-        print "Switching backend: %s to %s" % (BACKEND_TYPE,
-                                               event["KeyValueBackend"])
+        # print "Switching backend: %s to %s" % (BACKEND_TYPE,
+        #                                        event["KeyValueBackend"])
         SCORES_TABLE = None
         FLAGS_TABLE = None
 
     if SCORES_TABLE is None or FLAGS_TABLE is None:
-        swap_chain = chain.fork(False)
+        swap_chain = chain.fork_root()
         segment_id = swap_chain.log_start("BackendSwap")
-        print "Configuring backend resource connectors"
+        # print "Configuring backend resource connectors"
         BACKEND_TYPE = event['KeyValueBackend']
         ddb_resource = boto3.resource('dynamodb')
         if event['KeyValueBackend'] == 'DynamoDB':
@@ -66,7 +66,7 @@ def update_flag_data(chain):
     Regardless, return the current flag data.
     """
     if time.time() > (FLAGS_DATA['check_time'] + FLAGS_DATA['check_interval']):
-        update_chain = chain.fork()
+        update_chain = chain.fork_subsegment()
         scan_result = update_chain.trace("PeriodicFlagScan")(
             FLAGS_TABLE.scan)()
         update_chain.flush()

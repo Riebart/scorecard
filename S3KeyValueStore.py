@@ -3,6 +3,7 @@ Implements a performant key-value store backed on S3 that uses objects stored
 in a specific prefix. In practice, this is more performant and scales to a few
 hundred transactions per second for workloads without atomicity requirements.
 """
+import sys
 import json
 import cPickle
 import hashlib
@@ -61,7 +62,8 @@ class Table(object):
                     'Error']['Code'] == 'AccessDenied':
                 value_object = None
             else:
-                print self.bucket, self.prefix + '/' + object_key
+                sys.stderr.write("%s %s\n" %
+                                 (self.bucket, self.prefix + '/' + object_key))
                 raise exc
 
         ret = dict()

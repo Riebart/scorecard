@@ -27,7 +27,11 @@ class Chain(object):
                  backlog=10,
                  parent_id=None,
                  subsegment=False,
-                 trace_id=None):
+                 trace_id=None,
+                 mock=False):
+        # if true, then no AWS API calls will be made.
+        self.mock = mock
+
         # Trace IDs are public, so this ensures that trace IDs can't be guessed
         # by using this key as an HMAC with the name and the timestamp.
         self.trace_id_key = "".join(
@@ -84,7 +88,20 @@ class Chain(object):
         return hmac.new(self.trace_id_key, str(uuid.uuid1()),
                         hashlib.sha256).hexdigest()[:16]
 
-    def fork(self, subsegment=True, parent_id=None):
+    def fork_subsegment(self, parent_id=None):
+        """
+        Fork a subsegment chain that reports with type=subsgement.
+        """
+        return self.__fork(subsegment=True, parent_id=parent_id)
+
+    def fork_root(self, parent_id=None):
+        """
+        Fork a chain that is a child of the given chain or parent ID, and will
+        be a node in the service map.
+        """
+        return self.__fork(subsegment=False, parent_id=parent_id)
+
+    def __fork(self, subsegment=True, parent_id=None):
         """
         Return a forked child trace that will have this one as a parent. Useful
         for creating a new chain of events. Because fork evnts depend on knowing
@@ -106,7 +123,8 @@ class Chain(object):
             parent_id=parent_id,
             subsegment=subsegment,
             backlog=self.backlog,
-            trace_id=self.trace_id)
+            trace_id=self.trace_id,
+            mock=self.mock)
 
     def log(self,
             start_time,
@@ -253,16 +271,16 @@ class Chain(object):
             self.flush_lock.release()
             return 0
 
-        for segment in self.segments:
-            print segment
+        # for segment in self.segments:
+        #     print segment
         nsegments = len(self.segments)
-        if Chain.__client is not None:
-            print "Submitting %d segments" % len(self.segments)
+        if Chain.__client is not None and not self.mock:
+            # print "Submitting %d segments" % len(self.segments)
             resp = Chain.__client.put_trace_segments(
                 TraceSegmentDocuments=self.segments)
         else:
             resp = {"MockXray": True}
-        print json.dumps(resp)
+        # print json.dumps(resp)
         self.segments = []
         self.flush_lock.release()
         return nsegments
