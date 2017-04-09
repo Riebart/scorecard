@@ -60,6 +60,9 @@ def traced_lambda(name):
                 annotations.update(ret["annotations"])
                 del ret["annotations"]
 
+            if os.environ["DEBUG"] == "TRUE":
+                ret["Debug"] = {"MockedXray": mock}
+
             root_chain.log_end(
                 segment_id=segment_id,
                 http=http,

@@ -2,6 +2,8 @@
 """
 Unit tests for the submission logic
 """
+
+import os
 import copy
 import time
 import uuid
@@ -16,9 +18,9 @@ import ScoreCardSubmit
 import ScoreCardTally
 
 
-class MotoTest(unittest.TestCase):
+class ScoreCardTest(unittest.TestCase):
     """
-    Test the S3 Key-Value backend for correctness using moto for local mocking
+    Setup and teardown shared by all ScoreCard tests.
     """
 
     @classmethod
@@ -27,8 +29,8 @@ class MotoTest(unittest.TestCase):
         If there is no AWS region set from the environment provider, then configure
         the default region as US-EAsT-1
         """
+        os.environ["MOCK_XRAY"] = "TRUE"
         if boto3.Session().region_name is None:
-            import os
             os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 
     def populate_flags(self, table_name=None, timeout=0.5):
@@ -224,6 +226,12 @@ class MotoTest(unittest.TestCase):
         for mock in self.mocks:
             mock.stop()
         self.mocks = None
+
+
+class BackendTest(ScoreCardTest):
+    """
+    Test the S3 Key-Value backend for correctness using moto for local mocking
+    """
 
     def test_submit_backend_swap(self):
         """
@@ -586,6 +594,166 @@ class MotoTest(unittest.TestCase):
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
             assert res == {'Team': event['team'], 'Score': 0.0}
+
+
+class XraySamplingTests(ScoreCardTest):
+    """
+    Test that the scorecard functions properly obey Xray sampling rates.
+    """
+
+    @staticmethod
+    def __binomial_list(flips, heads):
+        return [
+            Decimal(i) / j
+            for i, j in zip(range(1, heads + 1), range(1, heads + 1))
+        ] + [
+            Decimal(i) / j
+            for i, j in zip(
+                range(heads + 1, flips + 1), range(1, flips - heads + 2))
+        ]
+
+    @staticmethod
+    def __coin_toss(flips, heads, p_head=0.5):
+        # p^m (1-p)^(n-m) Binomial[n,m]
+        binomial = XraySamplingTests.__binomial_list(flips, heads)
+        probabilities = [Decimal(p_head) for _ in xrange(heads)] + [
+            Decimal(1 - p_head) for _ in xrange(flips - heads)
+        ]
+        return reduce(lambda a, b: a * b,
+                      [a * b for a, b in zip(binomial, probabilities)])
+
+    @staticmethod
+    def __coin_toss_range(flips, min_heads, max_heads, p_head):
+        if min_heads < 0 or max_heads > flips:
+            return float('nan')
+        return sum([
+            XraySamplingTests.__coin_toss(flips, heads, p_head)
+            for heads in xrange(min_heads, max_heads + 1)
+        ])
+
+    @staticmethod
+    def __coin_toss_counts(desired_rate, min_rate, max_rate, p_cutoff=0.999):
+        dflips = 1024
+        flips = dflips
+        while True:
+            prob = XraySamplingTests.__coin_toss_range(flips,
+                                                       int(min_rate * flips),
+                                                       int(max_rate * flips),
+                                                       desired_rate)
+            if prob < p_cutoff:
+                flips += dflips
+            elif dflips > 1:
+                flips -= dflips
+                dflips /= 2
+                flips += dflips
+            else:
+                break
+        return flips
+
+    def test_binomial(self):
+        """
+        Test that the binomial calculation works for Binomial(100, n)
+        """
+        binomials = [
+            reduce(lambda a, b: a * b, self.__binomial_list(100, n))
+            for n in xrange(0, 101)]
+        expected = [
+            1, 100, 4950, 161700, 3921225, 75287520, 1192052400, 16007560800,
+            186087894300, 1902231808400, 17310309456440, 141629804643600, 1050421051106700,
+            7110542499799200, 44186942677323600, 253338471349988640, 1345860629046814650,
+            6650134872937201800, 30664510802988208300, 132341572939212267400,
+            535983370403809682970, 2041841411062132125600, 7332066885177656269200,
+            24865270306254660391200, 79776075565900368755100, 242519269720337121015504,
+            699574816500972464467800, 1917353200780443050763600, 4998813702034726525205100,
+            12410847811948286545336800, 29372339821610944823963760, 66324638306863423796047200,
+            143012501349174257560226775, 294692427022540894366527900, 580717429720889409486981450,
+            1095067153187962886461165020, 1977204582144932989443770175,
+            3420029547493938143902737600, 5670048986634686922786117600,
+            9013924030034630492634340800, 13746234145802811501267369720,
+            20116440213369968050635175200, 28258808871162574166368460400,
+            38116532895986727945334202400, 49378235797073715747364762200,
+            61448471214136179596720592960, 73470998190814997343905056800,
+            84413487283064039501507937600, 93206558875049876949581681100,
+            98913082887808032681188722800, 100891344545564193334812497256,
+            98913082887808032681188722800, 93206558875049876949581681100,
+            84413487283064039501507937600, 73470998190814997343905056800,
+            61448471214136179596720592960, 49378235797073715747364762200,
+            38116532895986727945334202400, 28258808871162574166368460400,
+            20116440213369968050635175200, 13746234145802811501267369720,
+            9013924030034630492634340800, 5670048986634686922786117600,
+            3420029547493938143902737600, 1977204582144932989443770175,
+            1095067153187962886461165020, 580717429720889409486981450,
+            294692427022540894366527900, 143012501349174257560226775,
+            66324638306863423796047200, 29372339821610944823963760, 12410847811948286545336800,
+            4998813702034726525205100, 1917353200780443050763600, 699574816500972464467800,
+            242519269720337121015504, 79776075565900368755100, 24865270306254660391200,
+            7332066885177656269200, 2041841411062132125600, 535983370403809682970,
+            132341572939212267400, 30664510802988208300, 6650134872937201800,
+            1345860629046814650, 253338471349988640, 44186942677323600, 7110542499799200,
+            1050421051106700, 141629804643600, 17310309456440, 1902231808400, 186087894300,
+            16007560800, 1192052400, 75287520, 3921225, 161700, 4950, 100, 1]
+        max_rel_error = max([abs(float(a - b)) / b for a, b in zip(binomials, expected)])
+        assert max_rel_error < 10**-15
+
+    def test_coin_toss(self):
+        """
+        Test that the coin-toss simulation is correct for a few select values
+        """
+        for i in range(1, 101):
+            assert self.__coin_toss(100, i, 0.0) == 0.0
+        assert self.__coin_toss(100, 0, 0.0) == 1.0
+        for i in range(0, 100):
+            assert self.__coin_toss(100, i, 1.0) == 0.0
+        assert self.__coin_toss(100, 100, 1.0) == 1.0
+        assert abs(
+            self.__coin_toss(300, 200, 0.75) -
+            Decimal(0.00026617318083780561928702841873999185536747448066193)) < 10**-15
+
+        # Now for a collection of tests with less precision
+        test_cases = [
+            [27, 3, 0.326783, 0.00766693], [19, 10, 0.50931, 0.178918],
+            [23, 15, 0.564874, 0.119859], [27, 16, 0.168794, 7.4084 * 10**-7],
+            [24, 9, 0.72225, 0.000315816], [13, 11, 0.417621, 0.00178283],
+            [8, 8, 0.478113, 0.0027305], [25, 22, 0.98442, 0.00615759],
+            [23, 2, 0.123151, 0.242895], [29, 27, 0.957073, 0.228824]]
+        for case in test_cases:
+            assert float(abs(self.__coin_toss(*case[:3]) - Decimal(case[3]))) < 10**-5
+
+    # def test_xray_sampling_rate(self):
+    #     """
+    #     Ensure that the rate at which requests are sampled is correct.
+    #     """
+    #     events_per_round = 100
+    #     os.environ["DEBUG"] = "TRUE"
+    #     for event in [self.ddb_event, self.s3_event]:
+    #         for xsp in [0.0, 0.01, 0.1, 0.5, 1.0]:
+    #             n_mocked = 0
+    #             os.environ["XraySampleProbability"] = str(xsp)
+    #             for _ in xrange(
+    #                     events_per_round):  # Tally the scores of N teams.
+    #                 event["team"] = str(randint(10**35, 10**36))
+    #                 res = ScoreCardTally.lambda_handler(
+    #                     copy.deepcopy(event), None)
+    #                 if res["Debug"]["MockedXray"]:
+    #                     n_mocked += 1
+    #             if xsp == 0.0:
+    #                 assert n_mocked == 0
+    #             elif xsp == 1.0:
+    #                 assert n_mocked == events_per_round
+    #             else:
+    #                 # f=Function[{n,m,p},
+    #                 # p^m (1-p)^(n-m) Binomial[n,m]
+    #                 # ];
+    #                 # g=Function[{n,m,k,p},
+    #                 # Table[
+    #                 # f[n,m+i,p],{i,-k,k}
+    #                 # ]//N
+    #                 # ];
+    #                 assert 0.9
+    #             print n_mocked, events_per_round
+
+    #     del os.environ["DEBUG"]
+    #     del os.environ["XraySampleProbability"]
 
 
 if __name__ == "__main__":

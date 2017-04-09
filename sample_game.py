@@ -76,7 +76,7 @@ def main():
     adjectives, nouns = word_parts()
 
     err_log("Generaging %d teams." % pargs.team_count)
-    teams = [(randint(10**36, 10**37), " ".join(
+    teams = [(randint(10**35, 10**36), " ".join(
         (sample(adjectives, 1)[0], sample(nouns, 1)[0])))
              for _ in xrange(pargs.team_count)]
     print json.dumps(teams)
