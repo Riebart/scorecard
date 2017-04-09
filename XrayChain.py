@@ -16,6 +16,25 @@ from threading import Lock
 import boto3
 
 
+class SimpleMockXrayClient(object):
+    """
+    A simple replacement for the xray boto3 client that just tracks the number
+    of unique trace IDs for which segments were logged.
+    """
+
+    def __init__(self, *_, **__):
+        self.trace_ids = []
+
+    def put_trace_segments(self, **kwargs):
+        """
+        Extract trace IDs from the argument and note them.
+        """
+        for segment_json in kwargs["TraceSegmentDocuments"]:
+            segment = json.loads(segment_json)
+            self.trace_ids.append(segment["trace_id"])
+        return {"MockXray": True}
+
+
 class Chain(object):
     """
     A chain of events that are temporally linked in a single trace ID. Supports
@@ -284,37 +303,3 @@ class Chain(object):
         self.segments = []
         self.flush_lock.release()
         return nsegments
-
-
-if __name__ == "__main__":
-    xc = Chain()
-    xc.log(time.time() - 2 - random.random(),
-           time.time() - 1 - random.random(), "Test_log1")
-    xc.log(time.time() - 2 - random.random(),
-           time.time() - 1 - random.random(), "Test_log2")
-    xc.log(time.time() - 2 - random.random(),
-           time.time() - 1 - random.random(), "Test_log3")
-    c1 = xc.fork(False)
-    c1.log(time.time() - random.random(), time.time(), "Child_log1")
-    c1.log(time.time() - random.random(),
-           time.time() + random.random(), "Child_log2")
-    c2 = c1.fork()
-    c2.log(time.time() - random.random(), time.time(), "Child2_log1")
-    c2.log(time.time() - random.random(),
-           time.time() + random.random(), "Child2_log2")
-
-    @c2.trace("DecoratedTrace")
-    def sleepy_func(dt):
-        time.sleep(dt)
-
-    def sleepy_func2(dt):
-        time.sleep(dt)
-
-    sleepy_func(0.5)
-    c3 = xc.fork()
-    c3.trace("CalledTrace")(sleepy_func2)(0.75)
-    c3.trace("OtherCalledTrace")(sleepy_func2)(0.75)
-    c3.flush()
-    c1.flush()
-    c2.flush()
-    xc.flush()
