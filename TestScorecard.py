@@ -681,7 +681,7 @@ class XraySamplingTests(ScoreCardTest):
             for fairness in [random() for _ in xrange(10)]
             for flip_count in [randint(100, 500) for _ in xrange(10)]]
         deltas = [abs(p - 1) for p in total_probabilities]
-        print max(deltas)
+        assert max(deltas) < 10**-14
 
     def test_coin_toss_count(self):
         """
