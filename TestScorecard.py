@@ -8,7 +8,7 @@ import copy
 import time
 import uuid
 import unittest
-from random import randint
+from random import randint, random
 from decimal import Decimal
 
 import boto3
@@ -17,6 +17,7 @@ import moto
 import ScoreCardSubmit
 import ScoreCardTally
 
+from util import binomial_list, coin_toss, coin_toss_counts
 
 class ScoreCardTest(unittest.TestCase):
     """
@@ -33,7 +34,7 @@ class ScoreCardTest(unittest.TestCase):
         if boto3.Session().region_name is None:
             os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 
-    def populate_flags(self, table_name=None, timeout=0.5):
+    def populate_flags(self, table_name=None, timeout=0.75):
         """
         Generate and populate a collection of randomly generated flags, and return
         them.
@@ -601,61 +602,12 @@ class XraySamplingTests(ScoreCardTest):
     Test that the scorecard functions properly obey Xray sampling rates.
     """
 
-    @staticmethod
-    def __binomial_list(flips, heads):
-        return [
-            Decimal(i) / j
-            for i, j in zip(range(1, heads + 1), range(1, heads + 1))
-        ] + [
-            Decimal(i) / j
-            for i, j in zip(
-                range(heads + 1, flips + 1), range(1, flips - heads + 2))
-        ]
-
-    @staticmethod
-    def __coin_toss(flips, heads, p_head=0.5):
-        # p^m (1-p)^(n-m) Binomial[n,m]
-        binomial = XraySamplingTests.__binomial_list(flips, heads)
-        probabilities = [Decimal(p_head) for _ in xrange(heads)] + [
-            Decimal(1 - p_head) for _ in xrange(flips - heads)
-        ]
-        return reduce(lambda a, b: a * b,
-                      [a * b for a, b in zip(binomial, probabilities)])
-
-    @staticmethod
-    def __coin_toss_range(flips, min_heads, max_heads, p_head):
-        if min_heads < 0 or max_heads > flips:
-            return float('nan')
-        return sum([
-            XraySamplingTests.__coin_toss(flips, heads, p_head)
-            for heads in xrange(min_heads, max_heads + 1)
-        ])
-
-    @staticmethod
-    def __coin_toss_counts(desired_rate, min_rate, max_rate, p_cutoff=0.999):
-        dflips = 1024
-        flips = dflips
-        while True:
-            prob = XraySamplingTests.__coin_toss_range(flips,
-                                                       int(min_rate * flips),
-                                                       int(max_rate * flips),
-                                                       desired_rate)
-            if prob < p_cutoff:
-                flips += dflips
-            elif dflips > 1:
-                flips -= dflips
-                dflips /= 2
-                flips += dflips
-            else:
-                break
-        return flips
-
     def test_binomial(self):
         """
         Test that the binomial calculation works for Binomial(100, n)
         """
         binomials = [
-            reduce(lambda a, b: a * b, self.__binomial_list(100, n))
+            reduce(lambda a, b: a * b, binomial_list(100, n))
             for n in xrange(0, 101)]
         expected = [
             1, 100, 4950, 161700, 3921225, 75287520, 1192052400, 16007560800,
@@ -693,21 +645,21 @@ class XraySamplingTests(ScoreCardTest):
             1050421051106700, 141629804643600, 17310309456440, 1902231808400, 186087894300,
             16007560800, 1192052400, 75287520, 3921225, 161700, 4950, 100, 1]
         max_rel_error = max([abs(float(a - b)) / b for a, b in zip(binomials, expected)])
-        assert max_rel_error < 10**-15
+        assert max_rel_error < 10**-14
 
     def test_coin_toss(self):
         """
         Test that the coin-toss simulation is correct for a few select values
         """
         for i in range(1, 101):
-            assert self.__coin_toss(100, i, 0.0) == 0.0
-        assert self.__coin_toss(100, 0, 0.0) == 1.0
+            assert coin_toss(100, i, 0.0) == 0.0
+        assert coin_toss(100, 0, 0.0) == 1.0
         for i in range(0, 100):
-            assert self.__coin_toss(100, i, 1.0) == 0.0
-        assert self.__coin_toss(100, 100, 1.0) == 1.0
+            assert coin_toss(100, i, 1.0) == 0.0
+        assert coin_toss(100, 100, 1.0) == 1.0
         assert abs(
-            self.__coin_toss(300, 200, 0.75) -
-            Decimal(0.00026617318083780561928702841873999185536747448066193)) < 10**-15
+            coin_toss(300, 200, 0.75) -
+            0.00026617318083780561928702841873999185536747448066193) < 10**-15
 
         # Now for a collection of tests with less precision
         test_cases = [
@@ -717,43 +669,77 @@ class XraySamplingTests(ScoreCardTest):
             [8, 8, 0.478113, 0.0027305], [25, 22, 0.98442, 0.00615759],
             [23, 2, 0.123151, 0.242895], [29, 27, 0.957073, 0.228824]]
         for case in test_cases:
-            assert float(abs(self.__coin_toss(*case[:3]) - Decimal(case[3]))) < 10**-5
+            assert float(abs(coin_toss(*case[:3]) - float(case[3]))) < 10**-5
 
-    # def test_xray_sampling_rate(self):
-    #     """
-    #     Ensure that the rate at which requests are sampled is correct.
-    #     """
-    #     events_per_round = 100
-    #     os.environ["DEBUG"] = "TRUE"
-    #     for event in [self.ddb_event, self.s3_event]:
-    #         for xsp in [0.0, 0.01, 0.1, 0.5, 1.0]:
-    #             n_mocked = 0
-    #             os.environ["XraySampleProbability"] = str(xsp)
-    #             for _ in xrange(
-    #                     events_per_round):  # Tally the scores of N teams.
-    #                 event["team"] = str(randint(10**35, 10**36))
-    #                 res = ScoreCardTally.lambda_handler(
-    #                     copy.deepcopy(event), None)
-    #                 if res["Debug"]["MockedXray"]:
-    #                     n_mocked += 1
-    #             if xsp == 0.0:
-    #                 assert n_mocked == 0
-    #             elif xsp == 1.0:
-    #                 assert n_mocked == events_per_round
-    #             else:
-    #                 # f=Function[{n,m,p},
-    #                 # p^m (1-p)^(n-m) Binomial[n,m]
-    #                 # ];
-    #                 # g=Function[{n,m,k,p},
-    #                 # Table[
-    #                 # f[n,m+i,p],{i,-k,k}
-    #                 # ]//N
-    #                 # ];
-    #                 assert 0.9
-    #             print n_mocked, events_per_round
+    def test_toss_count_summation(self):
+        """
+        Confirm that the sum of the probabilities sum to 1
+        """
+        total_probabilities = [
+            sum([coin_toss(flip_count, i, fairness)
+                 for i in xrange(0, flip_count + 1)])
+            for fairness in [random() for _ in xrange(10)]
+            for flip_count in [randint(100, 500) for _ in xrange(10)]]
+        deltas = [abs(p - 1) for p in total_probabilities]
+        print max(deltas)
 
-    #     del os.environ["DEBUG"]
-    #     del os.environ["XraySampleProbability"]
+    def test_coin_toss_count(self):
+        """
+        Sanity check that flip-counts finish properly
+        """
+        coin_toss_counts(0.5, 0.45, 0.55)
+        coin_toss_counts(0.9, 0.85, 0.95)
+        coin_toss_counts(0.1, 0.05, 0.15)
+        assert coin_toss_counts(0.0, 0.0, 0.0) == 1
+
+    def test_xray_sampling_rate(self):
+        """
+        Ensure that the rate at which requests are sampled is correct.
+        """
+        os.environ["DEBUG"] = "TRUE"
+        test_runs = []
+        for event in [self.ddb_event, self.s3_event]:
+            for xsp in [0.0, 0.01, 0.1, 0.5, 1.0]:
+                n_events = max(
+                    25,
+                    coin_toss_counts(
+                        xsp,
+                        max(0.0, xsp - 0.05),
+                        min(1.0, xsp + 0.05), 0.95)
+                )
+                n_mocked = 0
+                os.environ["XraySampleProbability"] = str(xsp)
+                tally_times = []
+                for _ in xrange(
+                        n_events):  # Tally the scores of N teams.
+                    t_0 = time.time()
+                    event["team"] = str(randint(10**35, 10**36))
+                    res = ScoreCardTally.lambda_handler(
+                        copy.deepcopy(event), None)
+                    if res["Debug"]["MockedXray"]:
+                        n_mocked += 1
+                    t_1 = time.time()
+                    tally_times.append(t_1 - t_0)
+                if xsp == 0.0:
+                    assert n_mocked == n_events
+                elif xsp == 1.0:
+                    assert n_mocked == 0
+                else:
+                    test_runs.append((
+                        max(0.0, xsp - 0.05),
+                        n_events, n_mocked,
+                        min(1.0, xsp + 0.05)))
+        # Since there were a total of 10 tests run with 6 logged, each wth a
+        # 95% chance of succeeding. The probability of >= 3 succeeding is 99.7%
+        test_results = [
+            min_p <= ((n_events - n_mocked) / float(n_events)) <= max_p
+            for min_p, n_events, n_mocked, max_p in test_runs]
+
+        n_passed = len([result for result in test_results if result])
+        assert n_passed >= 3
+
+        del os.environ["DEBUG"]
+        del os.environ["XraySampleProbability"]
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ import moto
 import S3KeyValueStore
 
 
-class MotoTest(unittest.TestCase):
+class S3KeyValueTests(unittest.TestCase):
     """
     Test the S3 Key-Value backend for correctness using moto for local mocking
     """

@@ -53,8 +53,9 @@ class Chain(object):
 
         # Trace IDs are public, so this ensures that trace IDs can't be guessed
         # by using this key as an HMAC with the name and the timestamp.
-        self.trace_id_key = "".join(
-            [random.choice("0123456789abcdef") for _ in xrange(32)])
+        self.trace_id_key = hex(random.randint(2**127, 2**128))[2:-1]
+        # self.trace_id_key = "".join(
+        #     [random.choice("0123456789abcdef") for _ in xrange(32)])
 
         # Backlog is the number of segments kept in the buffer before being
         # flushed to AWS.
