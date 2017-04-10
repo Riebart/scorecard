@@ -708,7 +708,7 @@ class XraySamplingTests(ScoreCardTest):
                         min(1.0, xsp + 0.05), 0.95)
                 )
                 n_mocked = 0
-                os.environ["XraySampleProbability"] = str(xsp)
+                os.environ["XrayTraceProbability"] = str(xsp)
                 tally_times = []
                 for _ in xrange(
                         n_events):  # Tally the scores of N teams.
@@ -739,7 +739,7 @@ class XraySamplingTests(ScoreCardTest):
         assert n_passed >= 3
 
         del os.environ["DEBUG"]
-        del os.environ["XraySampleProbability"]
+        del os.environ["XrayTraceProbability"]
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ operations.
 """
 
 import os
+import sys
 import json
 import hmac
 import time
@@ -291,16 +292,20 @@ class Chain(object):
             self.flush_lock.release()
             return 0
 
-        # for segment in self.segments:
-        #     print segment
+        for segment in self.segments:
+            sys.stderr.write(segment + "\n")
         nsegments = len(self.segments)
         if Chain.__client is not None and not self.mock:
-            # print "Submitting %d segments" % len(self.segments)
+            sys.stderr.write("Submitting %d segments\n" % len(self.segments))
             resp = Chain.__client.put_trace_segments(
                 TraceSegmentDocuments=self.segments)
         else:
-            resp = {"MockXray": True}
-        # print json.dumps(resp)
+            resp = {
+                "MockXray": True,
+                "NoneClient": Chain.__client is None,
+                "ExplicitlyMocked": self.mock
+            }
+        sys.stderr.write(json.dumps(resp) + "\n")
         self.segments = []
         self.flush_lock.release()
         return nsegments

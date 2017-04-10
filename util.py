@@ -4,6 +4,7 @@ functions.
 """
 
 import os
+import json
 from random import random
 from functools import wraps
 from XrayChain import Chain as XrayChain
@@ -26,7 +27,7 @@ def traced_lambda(name):
             # use the OS environment variable (choosing 0.0 if the )
             try:
                 sample_probability = float(
-                    os.environ.get("XraySampleProbability", 0.0))
+                    os.environ.get("XrayTraceProbability", 0.0))
             except ValueError:
                 sample_probability = 0.0
 
@@ -56,6 +57,8 @@ def traced_lambda(name):
                 "Application": "Scorecard",
                 "BackendType": event["KeyValueBackend"]
             }
+            if context is not None:
+                annotations["AWSRequestId"] = context.aws_request_id
             if "annotations" in ret:
                 annotations.update(ret["annotations"])
                 del ret["annotations"]
@@ -63,14 +66,16 @@ def traced_lambda(name):
             if os.environ.get("DEBUG", None) == "TRUE":
                 ret["Debug"] = {"MockedXray": mock}
 
+            try:
+                json.dumps(event)
+                metadata_event = event
+            except TypeError:
+                metadata_event = None
+
             root_chain.log_end(
                 segment_id=segment_id,
                 http=http,
-                metadata={
-                    "AWSRequestId":
-                    context.aws_request_id
-                    if context is not None else "<MISSING>"
-                },
+                metadata={"Event": metadata_event},
                 annotations=annotations)
             root_chain.flush()
             task_chain.flush()
@@ -80,19 +85,20 @@ def traced_lambda(name):
 
     return __decorator
 
+
 def binomial_list(flips, heads):
     """
     Return a list of n items where the numerators are [1,...,n] and the
     denomenators are (n-m)! and m!.
     """
     return [
-        float(i) / j
-        for i, j in zip(range(1, heads + 1), range(1, heads + 1))
+        float(i) / j for i, j in zip(range(1, heads + 1), range(1, heads + 1))
     ] + [
         float(i) / j
         for i, j in zip(
             range(heads + 1, flips + 1), range(1, flips - heads + 2))
     ]
+
 
 def coin_toss(flips, heads, p_head=0.5):
     """
@@ -107,6 +113,7 @@ def coin_toss(flips, heads, p_head=0.5):
     return reduce(lambda a, b: a * b,
                   [a * b for a, b in zip(binomial, probabilities)])
 
+
 def coin_toss_range(flips, min_heads, max_heads, p_head):
     """
     Return the probability of getting between the min and max number of heads
@@ -119,6 +126,7 @@ def coin_toss_range(flips, min_heads, max_heads, p_head):
         for heads in xrange(min_heads, max_heads + 1)
     ])
 
+
 def coin_toss_counts(p_head, min_rate, max_rate, p_cutoff=0.999):
     """
     Determine the necessary number of coin tosses required to ensure, within the
@@ -130,15 +138,14 @@ def coin_toss_counts(p_head, min_rate, max_rate, p_cutoff=0.999):
     last_prob = 0.0
     last_flips = 0
     while True:
-        prob = coin_toss_range(
-            flips,
-            int(min_rate * flips), int(max_rate * flips),
-            p_head)
+        prob = coin_toss_range(flips,
+                               int(min_rate * flips),
+                               int(max_rate * flips), p_head)
         if prob < p_cutoff:
             # Because of floating point error, two adjacent values
             # can have slightly different probabilities.
             if prob <= last_prob and flips > last_flips + 10:
-                print (prob, last_prob), (flips, last_flips)
+                print(prob, last_prob), (flips, last_flips)
                 raise RuntimeError("Specified rate range will not converge.")
             last_prob = prob
             last_flips = flips

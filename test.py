@@ -127,11 +127,11 @@ def integration_tests(stack_name):
         print "    Assert that a team's default score is 0"
         for team in [randint(10**35, 10**36) for _ in range(2)]:
             resp = requests.get(url=api_endpoint + "/score/" + str(team))
-            assert resp.json() == {'Score': 0.0, 'Team': team}
+            assert resp.json() == {'Score': 0.0, 'Team': str(team)}
 
         print "    Assert that each team cannot claim a non-existent flag"
         for team in [randint(10**35, 10**36) for _ in range(2)]:
-            record = {'team': team, 'flag': str(uuid.uuid1())}
+            record = {'team': str(team), 'flag': str(uuid.uuid1())}
             flags_record.append(record)
             resp = requests.post(
                 url=api_endpoint + "/flag",
@@ -141,7 +141,7 @@ def integration_tests(stack_name):
 
         print "    Assert that each team can claim a durable simple flag."
         for team in [randint(10**35, 10**36) for _ in range(2)]:
-            record = {'team': team, 'flag': flags[0]['flag']}
+            record = {'team': str(team), 'flag': flags[0]['flag']}
             flags_record.append(record)
             resp = requests.post(
                 url=api_endpoint + "/flag",
@@ -149,7 +149,7 @@ def integration_tests(stack_name):
                 headers={'Content-Type': 'application/json'})
             assert resp.json() == {'ValidFlag': True}
             resp = requests.get(url=api_endpoint + "/score/" + str(team))
-            assert resp.json() == {'Score': 1.0, 'Team': team}
+            assert resp.json() == {'Score': 1.0, 'Team': str(team)}
 
         print "    Assert that an authenticated flag can only be claimed by the right team"
         print "      Right team wrong key..."
@@ -165,7 +165,7 @@ def integration_tests(stack_name):
             headers={'Content-Type': 'application/json'})
         assert resp.json() == {'ValidFlag': False}
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+        assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
         print "      Right team right key..."
         record = {
             'team': flags[1]['auth_key'].keys()[0],
@@ -179,7 +179,7 @@ def integration_tests(stack_name):
             headers={'Content-Type': 'application/json'})
         assert resp.json() == {'ValidFlag': True}
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 2.0, 'Team': int(record['team'])}
+        assert resp.json() == {'Score': 2.0, 'Team': str(record['team'])}
         print "      Wrong team right key..."
         record = {
             'team': randint(10**35, 10**36),
@@ -193,7 +193,7 @@ def integration_tests(stack_name):
             headers={'Content-Type': 'application/json'})
         assert resp.json() == {'ValidFlag': False}
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 0.0, 'Team': record['team']}
+        assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
         print "      Wrong team wrong key..."
         record = {
             'team': randint(10**35, 10**36),
@@ -207,7 +207,7 @@ def integration_tests(stack_name):
             headers={'Content-Type': 'application/json'})
         assert resp.json() == {'ValidFlag': False}
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 0.0, 'Team': record['team']}
+        assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
 
         for flag_num in [2, 4]:
             print "    Assert that revocable flags tally correctly only within their lifetime."
@@ -225,12 +225,12 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/score/" + str(record['team']))
             assert resp.json() == {
                 'Score': flag_num + 1.0,
-                'Team': int(record['team'])
+                'Team': str(record['team'])
             }
             time.sleep(1.5 * float(flags[flag_num]['timeout']))
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
 
             print "    Recovable alive flags with auth keys for the..."
             print "      Right team wrong key"
@@ -247,7 +247,7 @@ def integration_tests(stack_name):
             assert resp.json() == {'ValidFlag': False}
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
 
             print "      Right team right key"
             record = {
@@ -265,12 +265,12 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/score/" + str(record['team']))
             assert resp.json() == {
                 'Score': flag_num + 1 + 1.0,
-                'Team': int(record['team'])
+                'Team': str(record['team'])
             }
             time.sleep(1.5 * float(flags[flag_num + 1]['timeout']))
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
 
             print "      Wrong team right key"
             record = {
@@ -286,7 +286,7 @@ def integration_tests(stack_name):
             assert resp.json() == {'ValidFlag': False}
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
 
             print "      Wrong team wrong key"
             record = {
@@ -302,7 +302,7 @@ def integration_tests(stack_name):
             assert resp.json() == {'ValidFlag': False}
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
 
         print "    Confirm that revocable-dead flags only count after they expire"
         record = {'team': randint(10**35, 10**36), 'flag': flags[6]['flag']}
@@ -313,10 +313,10 @@ def integration_tests(stack_name):
             headers={'Content-Type': 'application/json'})
         assert resp.json() == {'ValidFlag': True}
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 0.0, 'Team': int(record['team'])}
+        assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
         time.sleep(1.5 * float(flags[6]['timeout']))
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 7.0, 'Team': int(record['team'])}
+        assert resp.json() == {'Score': 7.0, 'Team': str(record['team'])}
 
     except Exception as e:
         print "Tests Unsuccessful"
