@@ -17,25 +17,6 @@ from threading import Lock
 import boto3
 
 
-class SimpleMockXrayClient(object):
-    """
-    A simple replacement for the xray boto3 client that just tracks the number
-    of unique trace IDs for which segments were logged.
-    """
-
-    def __init__(self, *_, **__):
-        self.trace_ids = []
-
-    def put_trace_segments(self, **kwargs):
-        """
-        Extract trace IDs from the argument and note them.
-        """
-        for segment_json in kwargs["TraceSegmentDocuments"]:
-            segment = json.loads(segment_json)
-            self.trace_ids.append(segment["trace_id"])
-        return {"MockXray": True}
-
-
 class Chain(object):
     """
     A chain of events that are temporally linked in a single trace ID. Supports
@@ -172,10 +153,8 @@ class Chain(object):
         #   then they are new nodes that are linked hierarchically in the service map
         # - Subsegments don't appear in the service map, but do contribute to the
         #   times represented in the service map.
-        if name is None:
-            raise ValueError(
-                ("When logging, the class 'name' and method 'name' parameters "
-                 "cannot both be None"))
+        if not (isinstance(name, str) or isinstance(name, unicode)):
+            raise ValueError("'name' Parameter must be a string")
 
         segment = {
             "name": name,
@@ -295,8 +274,8 @@ class Chain(object):
         for segment in self.segments:
             sys.stderr.write(segment + "\n")
         nsegments = len(self.segments)
+        sys.stderr.write("Submitting %d segments\n" % len(self.segments))
         if Chain.__client is not None and not self.mock:
-            sys.stderr.write("Submitting %d segments\n" % len(self.segments))
             resp = Chain.__client.put_trace_segments(
                 TraceSegmentDocuments=self.segments)
         else:

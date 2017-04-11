@@ -17,7 +17,7 @@ import moto
 import ScoreCardSubmit
 import ScoreCardTally
 
-from util import binomial_list, coin_toss, coin_toss_counts
+from util import binomial_list, coin_toss, coin_toss_counts, coin_toss_range
 
 class ScoreCardTest(unittest.TestCase):
     """
@@ -683,7 +683,7 @@ class XraySamplingTests(ScoreCardTest):
         deltas = [abs(p - 1) for p in total_probabilities]
         assert max(deltas) < 10**-14
 
-    def test_coin_toss_count(self):
+    def test_coin_toss_count1(self):
         """
         Sanity check that flip-counts finish properly
         """
@@ -691,6 +691,37 @@ class XraySamplingTests(ScoreCardTest):
         coin_toss_counts(0.9, 0.85, 0.95)
         coin_toss_counts(0.1, 0.05, 0.15)
         assert coin_toss_counts(0.0, 0.0, 0.0) == 1
+
+    def test_coin_toss_count2(self):
+        """
+        Sanity check that flip-counts abort properly when divergence is detected
+        """
+        exc = None
+        try:
+            coin_toss_counts(0.5, 0.499, 0.511)
+        except RuntimeError as exc:
+            pass
+        assert exc is not None
+
+    def test_coin_toss_range(self):
+        """
+        Sanity check that the range function enforces valid values.
+        """
+        from math import isnan
+        assert isnan(coin_toss_range(100, 99, 101, 0.5))
+        assert isnan(coin_toss_range(100, -1, 101, 0.5))
+
+    def test_default_untraced(self):
+        """
+        Ensure that the if the sampling rate is unspecified, it is not sampled.
+        """
+        os.environ["DEBUG"] = "TRUE"
+        for event in [self.ddb_event, self.s3_event]:
+            for _ in range(10):
+                event["team"] = str(randint(10**35, 10**36))
+                res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
+                assert res["Debug"]["MockedXray"]
+
 
     def test_xray_sampling_rate(self):
         """
@@ -708,7 +739,7 @@ class XraySamplingTests(ScoreCardTest):
                         min(1.0, xsp + 0.05), 0.95)
                 )
                 n_mocked = 0
-                os.environ["XrayTraceProbability"] = str(xsp)
+                os.environ["XraySampleRate"] = str(xsp)
                 tally_times = []
                 for _ in xrange(
                         n_events):  # Tally the scores of N teams.
@@ -739,7 +770,7 @@ class XraySamplingTests(ScoreCardTest):
         assert n_passed >= 3
 
         del os.environ["DEBUG"]
-        del os.environ["XrayTraceProbability"]
+        del os.environ["XraySampleRate"]
 
 
 if __name__ == "__main__":

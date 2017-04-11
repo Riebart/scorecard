@@ -100,10 +100,13 @@ def main():
 
     print "Building stack parameters..."
     stack_params = []
-    stack_params.append({
-        "ParameterKey": "XrayTraceProbability",
-        "UsePreviousValue": True
-    })
+
+    if stack_description is not None:
+        stack_params.append({
+            "ParameterKey": "XraySampleRate",
+            "UsePreviousValue": True
+        })
+
     stack_params.append({
         "ParameterKey": "CodeSourceBucket",
         "ParameterValue": pargs.code_bucket

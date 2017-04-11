@@ -27,8 +27,8 @@ def traced_lambda(name):
             # use the OS environment variable (choosing 0.0 if the )
             try:
                 sample_probability = float(
-                    os.environ.get("XrayTraceProbability", 0.0))
-            except ValueError:
+                    os.environ.get("XraySampleRate", 0.0))
+            except Exception:
                 sample_probability = 0.0
 
             # mock the Xray API calls if and only if the random() value is
@@ -59,6 +59,7 @@ def traced_lambda(name):
             }
             if context is not None:
                 annotations["AWSRequestId"] = context.aws_request_id
+
             if "annotations" in ret:
                 annotations.update(ret["annotations"])
                 del ret["annotations"]
@@ -145,8 +146,8 @@ def coin_toss_counts(p_head, min_rate, max_rate, p_cutoff=0.999):
             # Because of floating point error, two adjacent values
             # can have slightly different probabilities.
             if prob <= last_prob and flips > last_flips + 10:
-                print(prob, last_prob), (flips, last_flips)
-                raise RuntimeError("Specified rate range will not converge.")
+                raise RuntimeError("Specified rate range will not converge.",
+                                   (prob, last_prob), (flips, last_flips))
             last_prob = prob
             last_flips = flips
             flips += dflips

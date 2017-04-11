@@ -54,7 +54,7 @@ Parameters:
     AllowedValues:
     - DynamoDB
     - S3
-  XrayTraceProbability:
+  XraySampleRate:
     Description: The probability that an event will be traced via Xray, expressed
       as a floating point value in [0, 1].
     MaxValue: 1
@@ -315,11 +315,11 @@ Resources:
       Description: Ingest a submission and update the key-value backend tables
         appropriately.
       Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${SubmitLambdaRole}
-      MemorySize: "128"
+      MemorySize: "384"
       Timeout: "5"
       Environment:
         Variables:
-          XrayTraceProbability: !Ref XrayTraceProbability
+          XraySampleRate: !Ref XraySampleRate
       Runtime: python2.7
       Handler: ScoreCardSubmit.lambda_handler
       Code:
@@ -339,11 +339,11 @@ Resources:
       Description: Given a team ID, tally the score for that team from the key-value
         backend.
       Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${TallyLambdaRole}
-      MemorySize: "128"
+      MemorySize: "384"
       Timeout: "5"
       Environment:
         Variables:
-          XrayTraceProbability: !Ref XrayTraceProbability
+          XraySampleRate: !Ref XraySampleRate
       Runtime: python2.7
       Handler: ScoreCardTally.lambda_handler
       Code:

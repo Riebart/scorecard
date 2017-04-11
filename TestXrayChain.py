@@ -11,6 +11,18 @@ class XrayChainTests(unittest.TestCase):
     Test the XrayChain class.
     """
 
+    def test_log0(self):
+        """
+        Assert that an error is raised if the name is the wrong type.
+        """
+        chain = XrayChain.Chain(mock=True)
+        exc = None
+        try:
+            chain.log(0, 1, None)
+        except ValueError as exc:
+            pass
+        assert exc is not None
+
     def test_fork1(self):
         """
         Ensure that you can't fork() from a chain with no messages.
