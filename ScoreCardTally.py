@@ -3,7 +3,9 @@
 Given a team number, tally the score of that team.
 """
 
+import sys
 import time
+from threading import Thread
 
 import boto3
 from S3KeyValueStore import Table as S3Table
@@ -140,13 +142,13 @@ def lambda_handler(event, _, chain=None):
     # update the cache objects at the global scope.
     try:
         TEAM_SCORE_CACHE['timeout'] = float(event['ScoreCacheLifetime'])
-    except:
-        pass
+    except ValueError:
+        sys.stderr.write("Invalid ScoreCacheLifetime, does not parse as float")
 
     try:
         FLAGS_DATA['check_interval'] = float(event['FlagCacheLifetime'])
-    except:
-        pass
+    except ValueError:
+        sys.stderr.write("Invalid FlagCacheLifetime, does not parse as float")
 
     chain.trace_associated("ModuleInit")(__module_init)(event, chain)
     flag_data = chain.trace_associated("FlagDataUpdate")(update_flag_data)(
@@ -178,15 +180,30 @@ def lambda_handler(event, _, chain=None):
             }
         }
 
-    score = 0.0
     scores = []
+    threads = []
 
     segment_id = chain.log_start("ScoreCalculation")
     score_chain = chain.fork_subsegment()
     for flag in flag_data:
         # For each flag DDB row, try to score each flag for the team.
-        flag_score = score_chain.trace("ScoreFlag")(score_flag)(team, flag)
-        scores.append([flag['flag'], flag_score])
+        # For S3, use threads for asynchronous fetching of objects.
+        if BACKEND_TYPE == "S3":
+            # print(flag["flag"], score_flag(team, flag))
+            scoring_target = lambda t=team, f=flag: \
+                scores.append(score_chain.trace("ScoreFlag")(score_flag)(t, f))
+            thread = Thread(target=scoring_target)
+            thread.start()
+            threads.append(thread)
+        else:
+            scores.append(
+                score_chain.trace("ScoreFlag")(score_flag)(team, flag))
+
+    for thread in threads:
+        thread.join()
+
+    score = 0.0
+    for flag_score in scores:
         if flag_score is not None:
             score += float(flag_score)
     chain.log_end(segment_id)

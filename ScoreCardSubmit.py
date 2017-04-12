@@ -3,6 +3,7 @@
 Ingest a flag and update the DynamoDB table accordingly.
 """
 
+import sys
 import time
 from decimal import Decimal
 import boto3
@@ -100,8 +101,8 @@ def lambda_handler(event, _, chain=None):
     # update the cache objects at the global scope.
     try:
         FLAGS_DATA['check_interval'] = float(event['FlagCacheLifetime'])
-    except:
-        pass
+    except ValueError:
+        sys.stderr.write("Invalid FlagCacheLifetime, does not parse as float")
 
     chain.trace_associated("ModuleInit")(__module_init)(event, chain)
     flag_data = chain.trace_associated("FlagDataUpdate")(update_flag_data)(
