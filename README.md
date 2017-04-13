@@ -62,6 +62,24 @@ This leaves the stack with data in it, unlike the integration testing script whi
 
 This will also output a new constants.js file named as `constants.js.sample_{StackName}`.
 
+### Simulating Game Day
+
+There is an included script that is able to run simple simulations and estimate cache hit/miss ratios, as well as provide estimates on the amount of required DynamoDB capacity (RCUs) that will need to be provisioned on the ScoresTable DynamoDB resource. It will also emit some estimates of costs for other AWS resources that will be used during the event.
+
+```json
+$ python simulate_costs.py --num-teams 17 --num-flags 28 --num-clients 84 --score-ttl 30 --client-refresh 10
+{
+    "EstimatedCostPerHour": {
+        "DynamoDB": 0.029126066666666447,
+        "APIGateway": 1.79928,
+        "S3": 0.006452543999999952,
+        "Lambda": 0.43851899999999994
+    },
+    "MeanCacheHitProbability": 0.9887,
+    "EstimatedScoresTableRCU": 22.404666666666497
+}
+```
+
 ## QuickStart: Frontend
 
 Once the backend has been deployed, copy the `constants.js.example` file to `constants.js`, and edit the `API_ENDPOINT` to match that output at the end of the `deploy.py` output. Edit the `TEAMS` list to include the list of team IDs (and optionally, team names for client-side display). Host the following files together on a webserver (or S3) and distribute the link to the dashboard and submission HTML pages:
