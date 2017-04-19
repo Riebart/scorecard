@@ -76,6 +76,7 @@ def __main():
             "MeanCacheHitProbability": int(10000 * p_hit) / 10000.0,
             # Remember that weakly consistent reads are 2/RCU
             "EstimatedScoresTableRCU": rps / 2,
+            "AverageRequestsPerSecond": rps,
             "EstimatedCostPerHour": {
                 "DynamoDB":
                 0.065 * (rps / 2) / 50,
