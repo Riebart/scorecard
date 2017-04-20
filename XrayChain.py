@@ -21,6 +21,11 @@ class Chain(object):
     """
     A chain of events that are temporally linked in a single trace ID. Supports
     spawning child traces that will represent a tree of linked trace events.
+
+    If it is run in an environment, such as AWS Lambda, with an
+    "_X_AMZN_TRACE_ID" environment variable, then that variable's value is
+    parsed and used to fill in the trace ID, parent segment ID, and whether or
+    not this segment is sampled (mock).
     """
     __client = None if "MOCK_XRAY" in os.environ else boto3.client("xray")
 
@@ -29,7 +34,8 @@ class Chain(object):
                  parent_id=None,
                  subsegment=False,
                  trace_id=None,
-                 mock=False):
+                 mock=False,
+                 use_env_trace_id=True):
         # if true, then no AWS API calls will be made.
         self.mock = mock
 
@@ -45,6 +51,24 @@ class Chain(object):
 
         # The array buffer of events.
         self.segments = []
+
+        if use_env_trace_id and "_X_AMZN_TRACE_ID" in os.environ:
+            # The assumed format is:
+            # - "_X_AMZN_TRACE_ID": "Root=<trace-id>;Parent=<segment-id>;Sampled=<1|0>"
+            try:
+                env_trace_params = dict([
+                    p.split("=")
+                    for p in os.environ["_X_AMZN_TRACE_ID"].split(";")
+                ])
+                env_trace_id = env_trace_params["Root"]
+                env_parent_id = env_trace_params["Parent"]
+                env_sampled = env_trace_params["Sampled"]
+            except:
+                pass
+            else:
+                trace_id = env_trace_id
+                parent_id = env_parent_id
+                mock = False if env_sampled == "1" else True
 
         # If forked from a parent, the trace ID is inherited.
         if trace_id is None:
@@ -82,6 +106,12 @@ class Chain(object):
         # To ensure that in multithreaded situations if the same chain is being
         # used that the same event isn't flushed multiple times.
         self.flush_lock = Lock()
+
+    def __del__(self):
+        """
+        Flush the chain before it gets garbage collected.
+        """
+        self.flush()
 
     def __segment_id(self):
         """
@@ -211,14 +241,13 @@ class Chain(object):
         """
         segment = self.in_progress[segment_id]
         del self.in_progress[segment_id]
-        return self.log(
-            start_time=segment["start_time"],
-            end_time=time.time(),
-            name=segment["name"],
-            metadata=metadata,
-            annotations=annotations,
-            http=http,
-            segment_id=segment_id)
+        return self.log(start_time=segment["start_time"],
+                        end_time=time.time(),
+                        name=segment["name"],
+                        metadata=metadata,
+                        annotations=annotations,
+                        http=http,
+                        segment_id=segment_id)
 
     def trace(self, name):
         """
