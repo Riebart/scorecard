@@ -26,6 +26,12 @@ class Chain(object):
     "_X_AMZN_TRACE_ID" environment variable, then that variable's value is
     parsed and used to fill in the trace ID, parent segment ID, and whether or
     not this segment is sampled (mock).
+
+    In all cases, the provided explicit parameters (parent_id, trace_id, mock)
+    take precedence as long as all three are specified. In the event that
+    provided parameters are missing or not provided, the environment follows as
+    long as the `use_env_trace_params` is True. If it is False, then it falls
+    back to generating a fresh trace ID and otherwise default values.
     """
     __client = None if "MOCK_XRAY" in os.environ else boto3.client("xray")
 
@@ -34,16 +40,11 @@ class Chain(object):
                  parent_id=None,
                  subsegment=False,
                  trace_id=None,
-                 mock=False,
-                 use_env_trace_id=True):
-        # if true, then no AWS API calls will be made.
-        self.mock = mock
-
+                 mock=None,
+                 use_env_trace_params=True):
         # Trace IDs are public, so this ensures that trace IDs can't be guessed
         # by using this key as an HMAC with the name and the timestamp.
-        self.trace_id_key = hex(random.randint(2**127, 2**128))[2:-1]
-        # self.trace_id_key = "".join(
-        #     [random.choice("0123456789abcdef") for _ in xrange(32)])
+        self.trace_id_key = os.urandom(16)
 
         # Backlog is the number of segments kept in the buffer before being
         # flushed to AWS.
@@ -52,7 +53,7 @@ class Chain(object):
         # The array buffer of events.
         self.segments = []
 
-        if use_env_trace_id and "_X_AMZN_TRACE_ID" in os.environ:
+        if use_env_trace_params and "_X_AMZN_TRACE_ID" in os.environ:
             # The assumed format is:
             # - "_X_AMZN_TRACE_ID": "Root=<trace-id>;Parent=<segment-id>;Sampled=<1|0>"
             try:
@@ -64,36 +65,52 @@ class Chain(object):
                 env_parent_id = env_trace_params["Parent"]
                 env_sampled = env_trace_params["Sampled"]
             except:
-                pass
-            else:
-                trace_id = env_trace_id
-                parent_id = env_parent_id
-                mock = False if env_sampled == "1" else True
+                env_trace_id = None
+                env_parent_id = None
+                env_sampled = None
+        else:
+            env_trace_id = None
+            env_parent_id = None
+            env_sampled = None
 
         # If forked from a parent, the trace ID is inherited.
         if trace_id is None:
-            # The origin_time is used when constructing the trace ID.
-            origin_time = time.time()
+            if env_trace_id is None:
+                # The origin_time is used when constructing the trace ID.
+                origin_time = time.time()
 
-            # The identifier is unique to the trace ID
-            identifier = hmac.new(self.trace_id_key,
-                                  str(uuid.uuid1()), hashlib.sha256)
+                # The identifier is unique to the trace ID
+                identifier = hmac.new(self.trace_id_key,
+                                      str(uuid.uuid1()), hashlib.sha256)
 
-            # Construct the trace ID using HMAC to ensure that it can't be
-            # spoofed.
-            self.trace_id = "1-%s-%s" % (hex(int(origin_time))[2:],
-                                         identifier.hexdigest()[:24])
+                # Construct the trace ID using HMAC to ensure that it can't be
+                # spoofed.
+                self.trace_id = "1-%s-%s" % (hex(int(origin_time))[2:],
+                                             identifier.hexdigest()[:24])
+            else:
+                self.trace_id = env_trace_id
         else:
             self.trace_id = trace_id
+
+        # If a parent ID is included, this is a child chain, and the parent ID
+        # is included in all segments logged.
+        if parent_id is None:
+            self.parent_id = env_parent_id
+        else:
+            self.parent_id = parent_id
+
+        # if true, then no AWS API calls will be made.
+        if mock is not None:
+            self.mock = mock
+        elif env_sampled is not None:
+            self.mock = False if env_sampled == "1" else True
+        else:
+            self.mock = False
 
         # last_segment_id is used when forking a child chain from this one and
         # when logging. If an event has been logged from this chain, then the
         # segment ID is stored in last_segment_id and used if a child is forked.
         self.last_segment_id = None
-
-        # If a parent ID is included, this is a child chain, and the parent ID
-        # is included in all segments logged.
-        self.parent_id = parent_id
 
         # If logs for this are intended to be subsegments (contribute to the parent
         # runtime).
@@ -117,7 +134,8 @@ class Chain(object):
         """
         Generate a segment ID from a UUID and the trace key.
         """
-        return hmac.new(self.trace_id_key, str(uuid.uuid1()),
+        return hmac.new(self.trace_id_key,
+                        str(uuid.uuid1()).encode("ascii"),
                         hashlib.sha256).hexdigest()[:16]
 
     def fork_subsegment(self, parent_id=None):
