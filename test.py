@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
-Run a set of tests that inserts flags into the DynamoDB table, and ensures that all cases are covered when attempting to claim them.
+Run a set of tests that inserts flags into the DynamoDB table, and ensures that
+all cases are covered when attempting to claim them.
 
 Takes in a CloudFormation stack name and automatically idenfities URLs
 to use.
@@ -9,6 +10,8 @@ Becuse moto has limited support for API Gateway, AWS Lambda, and IAM,
 this uses a deployed stack for testing, and is unable to perform client
 only testing. All tests are integration tests.
 """
+
+from __future__ import print_function
 
 import copy
 import time
@@ -23,35 +26,45 @@ import boto3
 from botocore.exceptions import ClientError
 
 
+def helpful_assert_equal(lhs, rhs):
+    try:
+        assert lhs == rhs
+    except AssertionError as e:
+        print(lhs)
+        print(rhs)
+        print(traceback.format_exc())
+        raise e
+
+
 def update_stack_parameters(stack_name, parameters):
     """
     Perform an in-place update of a CloudFormation stack that replaces only the
     parameters. Also deploys a new API Gateway stage to make the new parameters
     take effect in the body mapping templates.
     """
-    print "Updating stack parameters..."
+    print("Updating stack parameters...")
     cfn_client = boto3.client('cloudformation')
     api_client = boto3.client('apigateway')
     try:
-        print "Updating stack..."
+        print("Updating stack...")
         cfn_client.update_stack(
             StackName=stack_name,
             UsePreviousTemplate=True,
             Parameters=parameters,
             Capabilities=['CAPABILITY_IAM'])
     except ClientError:
-        print "    No stack update necessary"
+        print("    No stack update necessary")
     else:
-        print "Waiting on stack update..."
+        print("Waiting on stack update...")
         update_waiter = cfn_client.get_waiter('stack_update_complete')
         update_waiter.wait(StackName=stack_name)
 
-    print "Deploying new API Gateway stage for new parameters..."
+    print("Deploying new API Gateway stage for new parameters...")
     api_resource = cfn_client.describe_stack_resources(
         StackName=stack_name,
         LogicalResourceId='API')['StackResources'][0]['PhysicalResourceId']
     api_client.create_deployment(restApiId=api_resource, stageName='Main')
-    print "    Sleeping while new stage deployment propagates..."
+    print("    Sleeping while new stage deployment propagates...")
     time.sleep(5)
 
 
@@ -70,11 +83,11 @@ def integration_tests(stack_name):
     cfn_client = boto3.client('cloudformation')
     ddb_client = boto3.client('dynamodb')
 
-    print "Performing integration tests against stack: %s" % stack_name
+    print("Performing integration tests against stack: %s" % stack_name)
     stack_parameters = cfn_client.describe_stacks(
         StackName=stack_name)['Stacks'][0]['Parameters']
 
-    print "Generating cache-free parameters..."
+    print("Generating cache-free parameters...")
     cache_free_parameters = copy.deepcopy(stack_parameters)
     score_cache = [
         p for p in cache_free_parameters
@@ -88,7 +101,7 @@ def integration_tests(stack_name):
     flags_cache['ParameterValue'] = '0'
 
     update_stack_parameters(stack_name, cache_free_parameters)
-    print "Cache parameter update complete"
+    print("Cache parameter update complete")
 
     api_resource = cfn_client.describe_stack_resources(
         StackName=stack_name,
@@ -108,13 +121,13 @@ def integration_tests(stack_name):
             0]['ParameterValue'] == 'S3':
         scores_table_name = None
 
-    print "Inserting flag configuration into DynamoDB..."
+    print("Inserting flag configuration into DynamoDB...")
     flags = populate_flags(flags_table_name, 5.0)
 
     api_endpoint = 'https://%s.execute-api.%s.amazonaws.com/Main' % (
         api_resource, boto3.Session().region_name)
 
-    print "Setup successful"
+    print("Setup successful")
 
     # Cache busting is handled by using newly generated team IDs each time. This
     # still necessitates some sleeping while we wait for the recovable flags to
@@ -122,14 +135,16 @@ def integration_tests(stack_name):
 
     flags_record = []
 
-    print "Running tests..."
+    print("Running tests...")
     try:
-        print "    Assert that a team's default score is 0"
+        print("    Assert that a team's default score is 0")
         for team in [randint(10**35, 10**36) for _ in range(2)]:
             resp = requests.get(url=api_endpoint + "/score/" + str(team))
-            assert resp.json() == {'Score': 0.0, 'Team': str(team)}
+            helpful_assert_equal(resp.json(),
+                                 {'Score': 0.0,
+                                  'Team': str(team)})
 
-        print "    Assert that each team cannot claim a non-existent flag"
+        print("    Assert that each team cannot claim a non-existent flag")
         for team in [randint(10**35, 10**36) for _ in range(2)]:
             record = {'team': str(team), 'flag': str(uuid.uuid1())}
             flags_record.append(record)
@@ -137,9 +152,9 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            assert resp.json() == {'ValidFlag': False}
+            helpful_assert_equal(resp.json(), {'ValidFlag': False})
 
-        print "    Assert that each team can claim a durable simple flag."
+        print("    Assert that each team can claim a durable simple flag.")
         for team in [randint(10**35, 10**36) for _ in range(2)]:
             record = {'team': str(team), 'flag': flags[0]['flag']}
             flags_record.append(record)
@@ -147,14 +162,18 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            assert resp.json() == {'ValidFlag': True}
+            helpful_assert_equal(resp.json(), {'ValidFlag': True})
             resp = requests.get(url=api_endpoint + "/score/" + str(team))
-            assert resp.json() == {'Score': 1.0, 'Team': str(team)}
+            helpful_assert_equal(resp.json(),
+                                 {'Score': 1.0,
+                                  'Team': str(team)})
 
-        print "    Assert that an authenticated flag can only be claimed by the right team"
-        print "      Right team wrong key..."
+        print(
+            "    Assert that an authenticated flag can only be claimed by the right team"
+        )
+        print("      Right team wrong key...")
         record = {
-            'team': flags[1]['auth_key'].keys()[0],
+            'team': list(flags[1]['auth_key'].keys())[0],
             'auth_key': "",
             'flag': flags[1]['flag']
         }
@@ -163,13 +182,15 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        assert resp.json() == {'ValidFlag': False}
+        helpful_assert_equal(resp.json(), {'ValidFlag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
-        print "      Right team right key..."
+        helpful_assert_equal(resp.json(),
+                             {'Score': 0.0,
+                              'Team': str(record['team'])})
+        print("      Right team right key...")
         record = {
-            'team': flags[1]['auth_key'].keys()[0],
-            'auth_key': flags[1]['auth_key'].values()[0],
+            'team': list(flags[1]['auth_key'].keys())[0],
+            'auth_key': list(flags[1]['auth_key'].values())[0],
             'flag': flags[1]['flag']
         }
         flags_record.append(record)
@@ -177,13 +198,15 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        assert resp.json() == {'ValidFlag': True}
+        helpful_assert_equal(resp.json(), {'ValidFlag': True})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 2.0, 'Team': str(record['team'])}
-        print "      Wrong team right key..."
+        helpful_assert_equal(resp.json(),
+                             {'Score': 2.0,
+                              'Team': str(record['team'])})
+        print("      Wrong team right key...")
         record = {
             'team': randint(10**35, 10**36),
-            'auth_key': flags[1]['auth_key'].values()[0],
+            'auth_key': list(flags[1]['auth_key'].values())[0],
             'flag': flags[1]['flag']
         }
         flags_record.append(record)
@@ -191,10 +214,12 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        assert resp.json() == {'ValidFlag': False}
+        helpful_assert_equal(resp.json(), {'ValidFlag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
-        print "      Wrong team wrong key..."
+        helpful_assert_equal(resp.json(),
+                             {'Score': 0.0,
+                              'Team': str(record['team'])})
+        print("      Wrong team wrong key...")
         record = {
             'team': randint(10**35, 10**36),
             'auth_key': "",
@@ -205,12 +230,16 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        assert resp.json() == {'ValidFlag': False}
+        helpful_assert_equal(resp.json(), {'ValidFlag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
+        helpful_assert_equal(resp.json(),
+                             {'Score': 0.0,
+                              'Team': str(record['team'])})
 
         for flag_num in [2, 4]:
-            print "    Assert that revocable flags tally correctly only within their lifetime."
+            print(
+                "    Assert that revocable flags tally correctly only within their lifetime."
+            )
             record = {
                 'team': randint(10**35, 10**36),
                 'flag': flags[flag_num]['flag']
@@ -220,22 +249,24 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            assert resp.json() == {'ValidFlag': True}
+            helpful_assert_equal(resp.json(), {'ValidFlag': True})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {
+            helpful_assert_equal(resp.json(), {
                 'Score': flag_num + 1.0,
                 'Team': str(record['team'])
-            }
+            })
             time.sleep(1.5 * float(flags[flag_num]['timeout']))
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
+            helpful_assert_equal(resp.json(),
+                                 {'Score': 0.0,
+                                  'Team': str(record['team'])})
 
-            print "    Recovable alive flags with auth keys for the..."
-            print "      Right team wrong key"
+            print("    Recovable alive flags with auth keys for the...")
+            print("      Right team wrong key")
             record = {
-                'team': flags[flag_num + 1]['auth_key'].keys()[0],
+                'team': list(flags[flag_num + 1]['auth_key'].keys())[0],
                 'flag': flags[flag_num + 1]['flag'],
                 'auth_key': "",
             }
@@ -244,51 +275,57 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            assert resp.json() == {'ValidFlag': False}
+            helpful_assert_equal(resp.json(), {'ValidFlag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
+            helpful_assert_equal(resp.json(),
+                                 {'Score': 0.0,
+                                  'Team': str(record['team'])})
 
-            print "      Right team right key"
+            print("      Right team right key")
             record = {
-                'team': flags[flag_num + 1]['auth_key'].keys()[0],
+                'team': list(flags[flag_num + 1]['auth_key'].keys())[0],
                 'flag': flags[flag_num + 1]['flag'],
-                'auth_key': flags[flag_num + 1]['auth_key'].values()[0],
+                'auth_key': list(flags[flag_num + 1]['auth_key'].values())[0],
             }
             flags_record.append(record)
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            assert resp.json() == {'ValidFlag': True}
+            helpful_assert_equal(resp.json(), {'ValidFlag': True})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {
+            helpful_assert_equal(resp.json(), {
                 'Score': flag_num + 1 + 1.0,
                 'Team': str(record['team'])
-            }
+            })
             time.sleep(1.5 * float(flags[flag_num + 1]['timeout']))
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
+            helpful_assert_equal(resp.json(),
+                                 {'Score': 0.0,
+                                  'Team': str(record['team'])})
 
-            print "      Wrong team right key"
+            print("      Wrong team right key")
             record = {
                 'team': randint(10**35, 10**36),
                 'flag': flags[flag_num + 1]['flag'],
-                'auth_key': flags[flag_num + 1]['auth_key'].values()[0],
+                'auth_key': list(flags[flag_num + 1]['auth_key'].values())[0],
             }
             flags_record.append(record)
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            assert resp.json() == {'ValidFlag': False}
+            helpful_assert_equal(resp.json(), {'ValidFlag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
+            helpful_assert_equal(resp.json(),
+                                 {'Score': 0.0,
+                                  'Team': str(record['team'])})
 
-            print "      Wrong team wrong key"
+            print("      Wrong team wrong key")
             record = {
                 'team': randint(10**35, 10**36),
                 'flag': flags[flag_num + 1]['flag'],
@@ -299,32 +336,40 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            assert resp.json() == {'ValidFlag': False}
+            helpful_assert_equal(resp.json(), {'ValidFlag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
+            helpful_assert_equal(resp.json(),
+                                 {'Score': 0.0,
+                                  'Team': str(record['team'])})
 
-        print "    Confirm that revocable-dead flags only count after they expire"
+        print(
+            "    Confirm that revocable-dead flags only count after they expire"
+        )
         record = {'team': randint(10**35, 10**36), 'flag': flags[6]['flag']}
         flags_record.append(record)
         resp = requests.post(
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        assert resp.json() == {'ValidFlag': True}
+        helpful_assert_equal(resp.json(), {'ValidFlag': True})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 0.0, 'Team': str(record['team'])}
+        helpful_assert_equal(resp.json(),
+                             {'Score': 0.0,
+                              'Team': str(record['team'])})
         time.sleep(1.5 * float(flags[6]['timeout']))
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        assert resp.json() == {'Score': 7.0, 'Team': str(record['team'])}
+        helpful_assert_equal(resp.json(),
+                             {'Score': 7.0,
+                              'Team': str(record['team'])})
 
     except Exception as e:
-        print "Tests Unsuccessful"
-        print traceback.format_exc()
-        print resp
-        print resp.json()
+        print("Tests Unsuccessful")
+        print(traceback.format_exc())
+        print(resp)
+        print(resp.json())
     else:
-        print "Tests successful"
+        print("Tests successful")
 
     for record in flags_record:
         flag = record['flag']
@@ -349,11 +394,11 @@ def integration_tests(stack_name):
                 'S': flag['flag']
             }})
 
-    print "Cleanup successful"
+    print("Cleanup successful")
 
     update_stack_parameters(stack_name, stack_parameters)
 
-    print "Cache policy restoration complete"
+    print("Cache policy restoration complete")
 
 
 def populate_flags(table_name=None, timeout=0.5):

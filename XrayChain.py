@@ -9,7 +9,6 @@ import json
 import hmac
 import time
 import uuid
-import random
 import hashlib
 from functools import wraps
 from threading import Lock
@@ -259,13 +258,14 @@ class Chain(object):
         """
         segment = self.in_progress[segment_id]
         del self.in_progress[segment_id]
-        return self.log(start_time=segment["start_time"],
-                        end_time=time.time(),
-                        name=segment["name"],
-                        metadata=metadata,
-                        annotations=annotations,
-                        http=http,
-                        segment_id=segment_id)
+        return self.log(
+            start_time=segment["start_time"],
+            end_time=time.time(),
+            name=segment["name"],
+            metadata=metadata,
+            annotations=annotations,
+            http=http,
+            segment_id=segment_id)
 
     def trace(self, name):
         """
@@ -318,10 +318,11 @@ class Chain(object):
             self.flush_lock.release()
             return 0
 
-        for segment in self.segments:
-            sys.stderr.write(segment + "\n")
         nsegments = len(self.segments)
-        sys.stderr.write("Submitting %d segments\n" % len(self.segments))
+        if Chain.__client is not None:
+            for segment in self.segments:
+                sys.stderr.write(segment + "\n")
+            sys.stderr.write("Submitting %d segments\n" % len(self.segments))
         if Chain.__client is not None and not self.mock:
             resp = Chain.__client.put_trace_segments(
                 TraceSegmentDocuments=self.segments)
@@ -331,7 +332,8 @@ class Chain(object):
                 "NoneClient": Chain.__client is None,
                 "ExplicitlyMocked": self.mock
             }
-        sys.stderr.write(json.dumps(resp) + "\n")
+        if Chain.__client is not None:
+            sys.stderr.write(json.dumps(resp) + "\n")
         self.segments = []
         self.flush_lock.release()
         return nsegments

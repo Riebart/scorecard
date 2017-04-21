@@ -226,6 +226,12 @@ The Dockerfile included builds the test environment suitable for running the uni
 
 Unit tests use the Python unittest framework.
 
+A useful one-liner for running tests inside of a docker environment:
+
+```bash
+docker build -t scorecard . && docker run --rm scorecard tar -cf - htmlcov | tar -xvf -
+```
+
 ## TODO
 
 - Permit fetching scores for multiple teams in a single request
