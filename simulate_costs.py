@@ -76,7 +76,7 @@ def __main():
             "MeanCacheHitProbability": int(10000 * p_hit) / 10000.0,
             # Remember that weakly consistent reads are 2/RCU
             "EstimatedScoresTableRCU": rps / 2,
-            "AverageRequestsPerSecond": rps,
+            "AverageRequestsPerSecond": hph / 3600,
             "EstimatedCostPerHour": {
                 "DynamoDB":
                 0.065 * (rps / 2) / 50,
@@ -86,7 +86,7 @@ def __main():
                 "APIGateway":
                 3.5 * hph / 1000000,
                 "S3":
-                rps * 3600 / 100000 * 0.004
+                rps * 3600 / 10000 * 0.004
             }
         },
         indent=4)
