@@ -94,10 +94,8 @@ Resources:
     Properties:
       AttributeDefinitions:
       - {AttributeName: team, AttributeType: N}
-      - {AttributeName: flag, AttributeType: S}
       KeySchema:
       - {AttributeName: team, KeyType: HASH}
-      - {AttributeName: flag, KeyType: RANGE}
       ProvisionedThroughput:
         ReadCapacityUnits: 1
         WriteCapacityUnits: 1
