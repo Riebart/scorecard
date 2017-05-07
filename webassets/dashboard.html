@@ -22,10 +22,13 @@
     <div id="wrapper" style="vertical-align:middle;position: absolute;top:50%;left:50%;transform:translate(-50%, -50%)">
         <div ng-controller="scoreboardController" class="scores">
             <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
-                <tr><th style="width:25%;text-align:center;">Team Number</th><th style="width:25%;text-align:center;">Score</th></tr>
-                <tr ng-repeat="(name, age) in scores">
-                    <td style="text-align:center;">{{name}}</td>
-                    <td style="text-align:center;">{{age}}</td>
+                <tr>
+                    <th style="width:25%;text-align:center;">Team</th>
+                    <th style="width:25%;text-align:center;">Score</th>
+                </tr>
+                <tr ng-repeat="(team, score) in scores">
+                    <td style="text-align:center;">{{team}}</td>
+                    <td style="text-align:center;">{{score}}</td>
                 </tr>
             </table>
         </div>

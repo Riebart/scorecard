@@ -33,8 +33,8 @@ myApp.controller('submissionController', ['$scope', '$rootScope', '$resource', '
             team: parseInt($scope.teamText),
             flag: $scope.flagText
         }, function (response) {
-            if ('ValidFlag' in response) {
-                if (response.ValidFlag) {
+            if ('valid_flag' in response) {
+                if (response.valid_flag) {
                     $scope.submission_status = 'success';
                 }
                 else {

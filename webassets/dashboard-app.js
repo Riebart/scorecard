@@ -27,7 +27,7 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
             $scope.ScoresResource.get({
                 team: team_id.toString()
             }, function (score) {
-                $scope.scores[$scope.team_names[score.Team]] = score.Score;
+                $scope.scores[$scope.team_names[score.team]] = score.score;
             });
         }
         return true;
