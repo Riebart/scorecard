@@ -53,6 +53,7 @@ Parameters:
     ConstraintDescription: Must specify either 'DynamoDB'' or 'S3'
     AllowedValues:
     - DynamoDB
+    # - SimpleDB
     # - S3
   XraySampleRate:
     Description: The probability that an event will be traced via Xray, expressed
