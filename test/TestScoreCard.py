@@ -2,12 +2,14 @@
 """
 Unit tests for the submission logic
 """
+from __future__ import print_function
 
 import os
 import copy
 import time
 import uuid
 import unittest
+import traceback
 from random import randint, random
 from decimal import Decimal
 
@@ -18,6 +20,15 @@ import ScoreCardSubmit
 import ScoreCardTally
 
 from util import binomial_list, coin_toss, coin_toss_counts, coin_toss_range
+
+def helpful_assert_equal(lhs, rhs):
+    try:
+        assert lhs == rhs
+    except AssertionError as e:
+        print("LHS:", lhs)
+        print("RHS:", rhs)
+        print(traceback.format_exc())
+        raise e
 
 class ScoreCardTest(unittest.TestCase):
     """
@@ -184,16 +195,10 @@ class ScoreCardTest(unittest.TestCase):
             AttributeDefinitions=[{
                 'AttributeName': 'team',
                 'AttributeType': 'N'
-            }, {
-                'AttributeName': 'flag',
-                'AttributeType': 'S'
             }],
             KeySchema=[{
                 'AttributeName': 'team',
                 'KeyType': 'HASH'
-            }, {
-                'AttributeName': 'flag',
-                'KeyType': 'RANGE'
             }],
             ProvisionedThroughput={
                 'ReadCapacityUnits': 1,
@@ -218,7 +223,12 @@ class ScoreCardTest(unittest.TestCase):
         for mock in self.mocks:
             mock.start()
         self.ddb_event = self.setup_dynamodb_backend()
-        self.s3_event = self.setup_s3_backend()
+        # self.s3_event = self.setup_s3_backend()
+
+        self.events = [
+            self.ddb_event,
+            # self.s3_event
+        ]
 
     def tearDown(self):
         """
@@ -234,110 +244,110 @@ class BackendTest(ScoreCardTest):
     Test the S3 Key-Value backend for correctness using moto for local mocking
     """
 
-    def test_submit_backend_swap(self):
-        """
-        Cofirm that the submission backend switches when different events are provided.
-        """
-        self.ddb_event['team'] = str(10)
-        self.ddb_event['flag'] = ''
-        ScoreCardSubmit.lambda_handler(self.ddb_event, None)
-        assert ScoreCardSubmit.BACKEND_TYPE == "DynamoDB"
-        assert not isinstance(ScoreCardSubmit.SCORES_TABLE,
-                              type(ScoreCardSubmit.S3Table))
-        self.s3_event['team'] = str(10)
-        self.s3_event['flag'] = ''
-        ScoreCardSubmit.lambda_handler(self.s3_event, None)
-        assert ScoreCardSubmit.BACKEND_TYPE == "S3"
-        assert isinstance(ScoreCardSubmit.SCORES_TABLE,
-                          ScoreCardSubmit.S3Table)
-        ScoreCardSubmit.lambda_handler(self.ddb_event, None)
-        assert ScoreCardSubmit.BACKEND_TYPE == "DynamoDB"
-        assert not isinstance(ScoreCardSubmit.SCORES_TABLE,
-                              type(ScoreCardSubmit.S3Table))
+    # def test_submit_backend_swap(self):
+    #     """
+    #     Cofirm that the submission backend switches when different events are provided.
+    #     """
+    #     self.ddb_event['team'] = str(10)
+    #     self.ddb_event['flag'] = ''
+    #     ScoreCardSubmit.lambda_handler(self.ddb_event, None)
+    #     helpful_assert_equal(ScoreCardSubmit.BACKEND_TYPE, "DynamoDB")
+    #     assert not isinstance(ScoreCardSubmit.SCORES_TABLE,
+    #                           type(ScoreCardSubmit.S3Table))
+    #     self.s3_event['team'] = str(10)
+    #     self.s3_event['flag'] = ''
+    #     ScoreCardSubmit.lambda_handler(self.s3_event, None)
+    #     helpful_assert_equal(ScoreCardSubmit.BACKEND_TYPE, "S3")
+    #     assert isinstance(ScoreCardSubmit.SCORES_TABLE,
+    #                       ScoreCardSubmit.S3Table)
+    #     ScoreCardSubmit.lambda_handler(self.ddb_event, None)
+    #     helpful_assert_equal(ScoreCardSubmit.BACKEND_TYPE, "DynamoDB")
+    #     assert not isinstance(ScoreCardSubmit.SCORES_TABLE,
+    #                           type(ScoreCardSubmit.S3Table))
 
     def test_missing_arguments(self):
         """
-        Assert that lack of 'team' AND 'flag' results in a ClientError with two errors
+        Assert that lack of 'team' AND 'flag' results in a client_error with two errors
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert 'ClientError' in res
-            assert len(res['ClientError']) == 2
+            assert 'client_error' in res
+            helpful_assert_equal(len(res['client_error']), 2)
 
     def test_missing_argument(self):
         """
-        Assert that lack of 'team' OR 'flag' results in a ClientError
+        Assert that lack of 'team' OR 'flag' results in a client_error
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             event['team'] = str(10)
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert 'ClientError' in res
-            assert len(res['ClientError']) == 1
+            assert 'client_error' in res
+            helpful_assert_equal(len(res['client_error']), 1)
             del event['team']
             event['flag'] = ''
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert 'ClientError' in res
-            assert len(res['ClientError']) == 1
+            assert 'client_error' in res
+            helpful_assert_equal(len(res['client_error']), 1)
 
     def test_nonintegral_team(self):
         """
         Assert that the team must be integral (or parsable as integral)
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             event['team'] = 'abcde'
             event['flag'] = ''
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert 'ClientError' in res
-            assert len(res['ClientError']) == 1
+            assert 'client_error' in res
+            helpful_assert_equal(len(res['client_error']), 1)
 
     def test_integral_team(self):
         """
         Assert that the team can be integral
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             event['team'] = str(10)
             event['flag'] = ''
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert 'ClientError' not in res
+            assert 'client_error' not in res
 
     def test_integral_string_team(self):
         """
         Assert that the team can be a parsable integer
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             event['team'] = '10'
             event['flag'] = ''
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert 'ClientError' not in res
+            assert 'client_error' not in res
 
     def test_invalid_flag(self):
         """
         Attempt to claim a nonexistent flag
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             event['team'] = str(10)
             event['flag'] = ""
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'ValidFlag': False}
+            helpful_assert_equal(res, {'valid_flag': False})
 
     def test_durable_flag(self):
         """
         A simple durable flag
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[0]['flag']
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'ValidFlag': True}
+            helpful_assert_equal(res, {'valid_flag': True})
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 1.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 1.0})
 
     def test_score_cache_lifetime_precision(self):
         """
         Ensure that the score caching is timely and tight.
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             for cache_lifetime in [0, 1, 2, 3, 4, 5]:
                 reload(ScoreCardSubmit)
                 reload(ScoreCardTally)
@@ -347,15 +357,15 @@ class BackendTest(ScoreCardTest):
                 event['ScoreCacheLifetime'] = cache_lifetime
                 t0 = time.time()
                 res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-                assert res == {'Team': event['team'], 'Score': 0.0}
+                helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
                 res = ScoreCardSubmit.lambda_handler(
                     copy.deepcopy(event), None)
-                assert res == {'ValidFlag': True}
+                helpful_assert_equal(res, {'valid_flag': True})
                 while True:
                     time.sleep(0.05)
                     res = ScoreCardTally.lambda_handler(
                         copy.deepcopy(event), None)
-                    if res['Score'] != 0:
+                    if res['score'] != 0:
                         break
                 cache_delay = time.time() - t0
                 assert cache_delay > cache_lifetime
@@ -366,7 +376,7 @@ class BackendTest(ScoreCardTest):
         Ensure that the flag caching is timely and tight
         """
         ddb_resource = boto3.resource('dynamodb')
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             tbl = ddb_resource.Table(event['FlagsTable'])
             for cache_lifetime in [0, 1, 2, 3, 4, 5]:
                 reload(ScoreCardSubmit)
@@ -384,10 +394,10 @@ class BackendTest(ScoreCardTest):
                 # Spin, submitting and tallying until the flag registers, and the score registers
                 t0 = time.time()
                 res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-                assert res == {'Team': event['team'], 'Score': 0.0}
+                helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
                 res = ScoreCardSubmit.lambda_handler(
                     copy.deepcopy(event), None)
-                assert res == {'ValidFlag': False}
+                helpful_assert_equal(res, {'valid_flag': False})
 
                 tbl.put_item(Item={'flag': flag, 'weight': Decimal(1)})
 
@@ -395,11 +405,11 @@ class BackendTest(ScoreCardTest):
                     time.sleep(0.05)
                     res = ScoreCardSubmit.lambda_handler(
                         copy.deepcopy(event), None)
-                    if res['ValidFlag']:
+                    if res['valid_flag']:
                         break
 
                 res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-                assert res == {'Team': event['team'], 'Score': 1.0}
+                helpful_assert_equal(res, {'team': event['team'], 'score': 1.0})
 
                 cache_delay = time.time() - t0
                 assert cache_delay > cache_lifetime
@@ -409,192 +419,192 @@ class BackendTest(ScoreCardTest):
         """
         Confirm that the wrong team cannot claim an authorized flag without a key
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[1]['flag']
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'ValidFlag': False}
+            helpful_assert_equal(res, {'valid_flag': False})
 
     def test_auth_flag2(self):
         """
         Confirm that the wrong team cannot claim an authorized flag with the wrong key
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[1]['flag']
             event['auth_key'] = str(uuid.uuid1())
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'ValidFlag': False}
+            helpful_assert_equal(res, {'valid_flag': False})
 
     def test_auth_flag3(self):
         """
         Confirm that the wrong team cannot claim an authorized flag with the right key
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[1]['flag']
             event['auth_key'] = flags[1]['auth_key'][flags[1]['auth_key']
                                                      .keys()[0]]
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'ValidFlag': False}
+            helpful_assert_equal(res, {'valid_flag': False})
 
     def test_auth_flag4(self):
         """
         Confirm that the right team and claim the flag with the right key
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(flags[1]['auth_key'].keys()[0])
             event['flag'] = flags[1]['flag']
             event['auth_key'] = flags[1]['auth_key'][event['team']]
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'ValidFlag': True}
+            helpful_assert_equal(res, {'valid_flag': True})
 
     def test_auth_flag5(self):
         """
         Confirm that the right team cannot claim the flag with the wrong key
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             # A durable flag with an auth key for one team as the right team with the wrong key
             flags = event['Flags']
             event['team'] = str(flags[1]['auth_key'].keys()[0])
             event['flag'] = flags[1]['flag']
             event['auth_key'] = str(uuid.uuid1())
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'ValidFlag': False}
+            helpful_assert_equal(res, {'valid_flag': False})
 
-    def test_tally_backend_swap(self):
-        """
-        Cofirm that the submission backend switches when different events are provided.
-        """
-        self.ddb_event['team'] = str(10)
-        self.ddb_event['flag'] = ''
-        ScoreCardTally.lambda_handler(self.ddb_event, None)
-        assert ScoreCardTally.BACKEND_TYPE == "DynamoDB"
-        assert not isinstance(ScoreCardTally.SCORES_TABLE,
-                              type(ScoreCardTally.S3Table))
-        self.s3_event['team'] = str(10)
-        self.s3_event['flag'] = ''
-        ScoreCardTally.lambda_handler(self.s3_event, None)
-        assert ScoreCardTally.BACKEND_TYPE == "S3"
-        assert isinstance(ScoreCardTally.SCORES_TABLE, ScoreCardTally.S3Table)
-        ScoreCardTally.lambda_handler(self.ddb_event, None)
-        assert ScoreCardTally.BACKEND_TYPE == "DynamoDB"
-        assert not isinstance(ScoreCardTally.SCORES_TABLE,
-                              type(ScoreCardTally.S3Table))
+    # def test_tally_backend_swap(self):
+    #     """
+    #     Cofirm that the submission backend switches when different events are provided.
+    #     """
+    #     self.ddb_event['team'] = str(10)
+    #     self.ddb_event['flag'] = ''
+    #     ScoreCardTally.lambda_handler(self.ddb_event, None)
+    #     helpful_assert_equal(ScoreCardTally.BACKEND_TYPE, "DynamoDB")
+    #     assert not isinstance(ScoreCardTally.SCORES_TABLE,
+    #                           type(ScoreCardTally.S3Table))
+    #     self.s3_event['team'] = str(10)
+    #     self.s3_event['flag'] = ''
+    #     ScoreCardTally.lambda_handler(self.s3_event, None)
+    #     helpful_assert_equal(ScoreCardTally.BACKEND_TYPE, "S3")
+    #     assert isinstance(ScoreCardTally.SCORES_TABLE, ScoreCardTally.S3Table)
+    #     ScoreCardTally.lambda_handler(self.ddb_event, None)
+    #     helpful_assert_equal(ScoreCardTally.BACKEND_TYPE, "DynamoDB")
+    #     assert not isinstance(ScoreCardTally.SCORES_TABLE,
+    #                           type(ScoreCardTally.S3Table))
 
     def test_tally_input1(self):
         """
-        Assert that lack of 'team' results in a ClientError
+        Assert that lack of 'team' results in a client_error
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert 'ClientError' in res
-            assert len(res['ClientError']) == 1
+            assert 'client_error' in res
+            helpful_assert_equal(len(res['client_error']), 1)
 
     def test_tally_input2(self):
         """
         Assert that the team must be integral (or parsable as integral)
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             event['team'] = 'abcde'
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert 'ClientError' in res
-            assert len(res['ClientError']) == 1
+            assert 'client_error' in res
+            helpful_assert_equal(len(res['client_error']), 1)
 
     def test_tally_default_score(self):
         """
         Confirm that the team score without flags claimed is 0
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             event['team'] = str(randint(10**35, 10**36))
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 0.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
 
     def test_tally_simple_cached(self):
         """
         Claim a simple durable flag, and fetch the scorefrom cache
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[0]['flag']
             event['ScoreCacheLifetime'] = 10
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 0.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 0.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
 
             # Override the team score cache to get real-time updates on scores
             event['ScoreCacheLifetime'] = 0
 
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 1.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 1.0})
 
     def test_tally_revocable_alive1(self):
         """
         A simple recovable-alive flag, 'yes' unspecified
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[2]['flag']
             event['ScoreCacheLifetime'] = 0
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 3.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 3.0})
             time.sleep(1.5 * float(flags[2]['timeout']))
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 0.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
 
     def test_tally_revocable_alive2(self):
         """
         A simple recovable-alive flag, 'yes' set to TRUE
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[4]['flag']
             event['ScoreCacheLifetime'] = 0
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 5.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 5.0})
             time.sleep(1.5 * float(flags[4]['timeout']))
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 0.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
 
     def test_tally_revocable_dead1(self):
         """
         A simple recovable-dead flag
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[6]['flag']
             event['ScoreCacheLifetime'] = 0
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 0.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
             time.sleep(1.5 * float(flags[6]['timeout']))
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 7.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 7.0})
 
     def test_unweighted_flag(self):
         """
         A simple durable flag without a weight
         """
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             flags = event['Flags']
             event['team'] = str(randint(10**35, 10**36))
             event['flag'] = flags[-1]['flag']
             event['ScoreCacheLifetime'] = 0
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            assert res == {'Team': event['team'], 'Score': 0.0}
+            helpful_assert_equal(res, {'team': event['team'], 'score': 0.0})
 
 
 class XraySamplingTests(ScoreCardTest):
@@ -652,11 +662,11 @@ class XraySamplingTests(ScoreCardTest):
         Test that the coin-toss simulation is correct for a few select values
         """
         for i in range(1, 101):
-            assert coin_toss(100, i, 0.0) == 0.0
-        assert coin_toss(100, 0, 0.0) == 1.0
+            helpful_assert_equal(coin_toss(100, i, 0.0), 0.0)
+        helpful_assert_equal(coin_toss(100, 0, 0.0), 1.0)
         for i in range(0, 100):
-            assert coin_toss(100, i, 1.0) == 0.0
-        assert coin_toss(100, 100, 1.0) == 1.0
+            helpful_assert_equal(coin_toss(100, i, 1.0), 0.0)
+        helpful_assert_equal(coin_toss(100, 100, 1.0), 1.0)
         assert abs(
             coin_toss(300, 200, 0.75) -
             0.00026617318083780561928702841873999185536747448066193) < 10**-15
@@ -690,7 +700,7 @@ class XraySamplingTests(ScoreCardTest):
         coin_toss_counts(0.5, 0.45, 0.55)
         coin_toss_counts(0.9, 0.85, 0.95)
         coin_toss_counts(0.1, 0.05, 0.15)
-        assert coin_toss_counts(0.0, 0.0, 0.0) == 1
+        helpful_assert_equal(coin_toss_counts(0.0, 0.0, 0.0), 1)
 
     def test_coin_toss_count2(self):
         """
@@ -716,7 +726,7 @@ class XraySamplingTests(ScoreCardTest):
         Ensure that the if the sampling rate is unspecified, it is not sampled.
         """
         os.environ["DEBUG"] = "TRUE"
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             for _ in range(10):
                 event["team"] = str(randint(10**35, 10**36))
                 res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
@@ -729,7 +739,7 @@ class XraySamplingTests(ScoreCardTest):
         """
         os.environ["DEBUG"] = "TRUE"
         test_runs = []
-        for event in [self.ddb_event, self.s3_event]:
+        for event in self.events:
             for xsp in [0.0, 0.01, 0.1, 0.5, 1.0]:
                 n_events = max(
                     25,
@@ -752,9 +762,9 @@ class XraySamplingTests(ScoreCardTest):
                     t_1 = time.time()
                     tally_times.append(t_1 - t_0)
                 if xsp == 0.0:
-                    assert n_mocked == n_events
+                    helpful_assert_equal(n_mocked, n_events)
                 elif xsp == 1.0:
-                    assert n_mocked == 0
+                    helpful_assert_equal(n_mocked, 0)
                 else:
                     test_runs.append((
                         max(0.0, xsp - 0.05),
