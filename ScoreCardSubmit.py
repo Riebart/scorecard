@@ -55,7 +55,6 @@ def __module_init(event, chain):
         FLAGS_DATA['check_time'] = time.time()
         FLAGS_DATA['flags'] = swap_chain.trace("SwapFlagScan")(
             FLAGS_TABLE.scan)()['Items']
-        swap_chain.flush()
 
 
 def update_flag_data(chain):
@@ -69,7 +68,6 @@ def update_flag_data(chain):
         update_chain = chain.fork_subsegment()
         scan_result = update_chain.trace("PeriodicFlagScan")(
             FLAGS_TABLE.scan)()
-        update_chain.flush()
         FLAGS_DATA['flags'] = scan_result.get('Items', [])
         FLAGS_DATA['check_time'] = time.time()
 
@@ -119,15 +117,15 @@ def lambda_handler(event, _, chain=None):
         event['team'] = None
 
     if event['team'] is None:
-        response['ClientError'] = [
+        response['client_error'] = [
             '"team" key must exist and be integeral or parsable as integral'
         ]
 
     if 'flag' not in event:
-        if 'ClientError' in response:
-            response['ClientError'].append('"flag" key must exist')
+        if 'client_error' in response:
+            response['client_error'].append('"flag" key must exist')
         else:
-            response['ClientError'] = ['"flag key must exist']
+            response['client_error'] = ['"flag key must exist']
 
     if len(response.keys()) > 0:
         return response
@@ -139,7 +137,7 @@ def lambda_handler(event, _, chain=None):
     ]
 
     if len(flag_items) == 0:
-        return {'ValidFlag': False}
+        return {'valid_flag': False}
     else:
         # Check to ensure that if the auth_key parameter exists for this flag,
         # that there is an auth_key parameter in the request, and that it matches
@@ -150,20 +148,18 @@ def lambda_handler(event, _, chain=None):
         flag_item = flag_items[0]
         if 'auth_key' in flag_item:
             if 'auth_key' not in event:
-                return {'ValidFlag': False}
+                return {'valid_flag': False}
 
             # Check if the auth_key provided matches the auth_key for the flag
             # for this team.
             if str(event['team']) not in flag_item['auth_key'] or event[
                     'auth_key'] != flag_item['auth_key'][str(event['team'])]:
-                return {'ValidFlag': False}
+                return {'valid_flag': False}
 
-        chain.trace("FlagSubmit")(SCORES_TABLE.put_item)(Item={
-            'team':
-            event['team'],
-            'flag':
-            event['flag'],
-            'last_seen':
+        chain.trace("FlagSubmit")(SCORES_TABLE.update_item)(Item={
+            "team":
+            event["team"],
+            event["flag"]:
             Decimal(time.time())
         })
-        return {'ValidFlag': True}
+        return {'valid_flag': True}
