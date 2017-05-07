@@ -86,8 +86,8 @@ Resources:
       KeySchema:
       - {AttributeName: flag, KeyType: HASH}
       ProvisionedThroughput:
-        ReadCapacityUnits: 1
-        WriteCapacityUnits: 1
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
 
   ScoresTable:
     Type: AWS::DynamoDB::Table
@@ -98,8 +98,8 @@ Resources:
       KeySchema:
       - {AttributeName: team, KeyType: HASH}
       ProvisionedThroughput:
-        ReadCapacityUnits: 1
-        WriteCapacityUnits: 1
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
 
   API:
     Type: AWS::ApiGateway::RestApi
