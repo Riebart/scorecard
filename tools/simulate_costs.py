@@ -66,11 +66,17 @@ def __main():
         hit_chance.append(
             __run(pargs.num_teams, opportunities, pargs.num_clients))
 
+    # Probability of a cache hit
     p_hit = sum(hit_chance) / len(hit_chance)
+
+    # Number of requests to the backend database per second, average.
     rps = (
         1 - p_hit
-    ) * pargs.num_teams * pargs.num_flags * pargs.num_clients / pargs.client_refresh
+    ) * pargs.num_teams * pargs.num_clients / pargs.client_refresh
+
+    # Number of requests per second to web API.
     hph = 3600 * pargs.num_clients * pargs.num_teams / pargs.client_refresh
+
     print json.dumps(
         {
             "MeanCacheHitProbability": int(10000 * p_hit) / 10000.0,
@@ -79,7 +85,7 @@ def __main():
             "AverageRequestsPerSecond": hph / 3600,
             "EstimatedCostPerHour": {
                 "DynamoDB":
-                0.065 * (rps / 2) / 50,
+                0.0065 * (rps / 2) / 50,
                 "Lambda":
                 0.20 * hph / 1000000 + (p_hit + 5 *
                                         (1 - p_hit)) * 0.000000625 * hph,
