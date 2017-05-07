@@ -104,4 +104,32 @@ class Table(object):
             Key=self.prefix + '/' + object_key,
             Body=cPickle.dumps(item))
 
+    def update_item(self, **kwargs):
+        for kwarg in ["Key", "UpdateExpression", "ExpressionAttributeValues"]:
+            if kwarg not in kwargs:
+                raise KeyError("'%s' is a non-optional keyword argument" %
+                               kwarg)
+
+        key = kwargs['Item']
+
+        if not isinstance(item, dict):
+            raise TypeError("'Item' must be a dictionary")
+
+        try:
+            item_key = dict([(k, item[k]) for k in self.keys])
+        except KeyError:
+            item_key = dict()
+
+        if set(item_key.keys()) != self.keys:
+            raise ValueError("'Item' must have at least the following keys: %s"
+                             % str(self.keys))
+
+        object_key = hashlib.sha256(
+            json.dumps(item_key, sort_keys=True)).hexdigest()
+
+        self.client.put_object(
+            Bucket=self.bucket,
+            Key=self.prefix + '/' + object_key,
+            Body=cPickle.dumps(item))
+
         return dict()
