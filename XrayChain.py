@@ -35,7 +35,7 @@ class Chain(object):
     __client = None if "MOCK_XRAY" in os.environ else boto3.client("xray")
 
     def __init__(self,
-                 backlog=10,
+                 backlog=100,
                  parent_id=None,
                  subsegment=False,
                  trace_id=None,
