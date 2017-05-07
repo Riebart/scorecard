@@ -156,10 +156,14 @@ def lambda_handler(event, _, chain=None):
                     'auth_key'] != flag_item['auth_key'][str(event['team'])]:
                 return {'valid_flag': False}
 
-        chain.trace("FlagSubmit")(SCORES_TABLE.update_item)(Item={
-            "team":
-            event["team"],
-            event["flag"]:
-            Decimal(time.time())
-        })
+        chain.trace("FlagSubmit")(SCORES_TABLE.update_item)(
+            Key={
+                "team": event["team"]
+            },
+            UpdateExpression="set %s=:last_seen" % event["flag"],
+            ExpressionAttributeValues={
+                ":last_seen": {
+                    "N": repr(time.time())
+                }
+            })
         return {'valid_flag': True}
