@@ -79,6 +79,7 @@ def lambda_handler(event, _, chain=None):
     """
     Insertion point for AWS Lambda
     """
+    start_time = time.time()
     # Expected format of the event object.
     # - team
     # - flag
@@ -162,8 +163,6 @@ def lambda_handler(event, _, chain=None):
             },
             UpdateExpression="set %s=:last_seen" % event["flag"],
             ExpressionAttributeValues={
-                ":last_seen": {
-                    "N": repr(time.time())
-                }
+                ":last_seen": Decimal(start_time)
             })
         return {'valid_flag': True}
