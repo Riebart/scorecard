@@ -20,11 +20,11 @@ FLAGS_TABLE = None
 #
 # This protects the backend and potential cost of running this from abusively
 # fast refreshing dashboard clients.
-TEAM_SCORE_CACHE = {'timeout': 30}
+TEAM_SCORE_CACHE = {"timeout": 30}
 
 # Flag data is only scanned from the flags DynamoDB table every 30 seconds to
 # conserve DynamoDB table capacity.
-FLAGS_DATA = {'check_interval': 30}
+FLAGS_DATA = {"check_interval": 30}
 
 
 # Note that there is already an awslambda infrastructure module called init()
@@ -37,7 +37,7 @@ def __module_init(event, chain):
     global SCORES_TABLE
     global FLAGS_TABLE
 
-    if BACKEND_TYPE != event['KeyValueBackend']:
+    if BACKEND_TYPE != event["KeyValueBackend"]:
         # print "Switching backend: %s to %s" % (BACKEND_TYPE,
         #                                        event["KeyValueBackend"])
         SCORES_TABLE = None
@@ -47,21 +47,20 @@ def __module_init(event, chain):
         swap_chain = chain.fork_root()
         segment_id = swap_chain.log_start("BackendSwap")
         # print "Configuring backend resource connectors"
-        BACKEND_TYPE = event['KeyValueBackend']
-        ddb_resource = boto3.resource('dynamodb')
-        if event['KeyValueBackend'] == 'DynamoDB':
-            SCORES_TABLE = ddb_resource.Table(event['ScoresTable'])
+        BACKEND_TYPE = event["KeyValueBackend"]
+        ddb_resource = boto3.resource("dynamodb")
+        if event["KeyValueBackend"] == "DynamoDB":
+            SCORES_TABLE = ddb_resource.Table(event["ScoresTable"])
         else:
-            SCORES_TABLE = S3Table(event['KeyValueS3Bucket'],
-                                   event['KeyValueS3Prefix'], ['flag', 'team'])
-        FLAGS_TABLE = ddb_resource.Table(event['FlagsTable'])
+            SCORES_TABLE = S3Table(event["KeyValueS3Bucket"],
+                                   event["KeyValueS3Prefix"], ["flag", "team"])
+        FLAGS_TABLE = ddb_resource.Table(event["FlagsTable"])
         swap_chain.log_end(segment_id)
 
         # Prime the pump by scanning for flags
-        FLAGS_DATA['check_time'] = time.time()
-        FLAGS_DATA['flags'] = swap_chain.trace("SwapFlagScan")(
-            FLAGS_TABLE.scan)()['Items']
-        swap_chain.flush()
+        FLAGS_DATA["check_time"] = time.time()
+        FLAGS_DATA["flags"] = swap_chain.trace("SwapFlagScan")(
+            FLAGS_TABLE.scan)()["Items"]
 
 
 def update_flag_data(chain):
@@ -71,40 +70,38 @@ def update_flag_data(chain):
 
     Regardless, return the current flag data.
     """
-    if time.time() > (FLAGS_DATA['check_time'] + FLAGS_DATA['check_interval']):
+    if time.time() > (FLAGS_DATA["check_time"] + FLAGS_DATA["check_interval"]):
         update_chain = chain.fork_subsegment()
         scan_result = update_chain.trace("PeriodicFlagScan")(
             FLAGS_TABLE.scan)()
-        update_chain.flush()
-        FLAGS_DATA['flags'] = scan_result.get('Items', [])
-        FLAGS_DATA['check_time'] = time.time()
+        FLAGS_DATA["flags"] = scan_result.get("Items", [])
+        FLAGS_DATA["check_time"] = time.time()
 
-    return FLAGS_DATA['flags']
+    return FLAGS_DATA["flags"]
 
 
-def score_flag(team, flag):
+def score_flag(team, flag, item):
     """
     Given a team ID, and a flag DynamoDB row.
     """
-    item = SCORES_TABLE.get_item(Key={'team': team, 'flag': flag['flag']})
-    if 'Item' in item:
-        team_flag = item['Item']
-
+    # Attempt to get the flag last_seen value from the ddb item, otherwise
+    # just return None.
+    last_seen = item.get(flag["flag"], None)
+    if last_seen is not None:
         # Try to fetch the weight of the flag, ignore it otherwise.
-        if 'weight' not in flag:
+        if "weight" not in flag:
             return None
         else:
-            flag_weight = float(flag['weight'])
+            flag_weight = float(flag["weight"])
 
         # Check to see if there's a timeout value for this flag.
-        if 'timeout' in flag:
+        if "timeout" in flag:
             # if there is, check to see if the flag needs to have been seen
             # within the last timeout, or NOT have been seen.
             # If the 'yes' value is not in the flag row, then assume it is
             # True.
-            flag_timeout = float(flag['timeout'])
-            last_seen = float(team_flag['last_seen'])
-            if 'yes' not in flag or flag['yes']:
+            flag_timeout = float(flag["timeout"])
+            if "yes" not in flag or flag["yes"]:
                 # If the flag was NOT seen in the last flag_timeout seconds,
                 # then return nothing.
                 if last_seen < time.time() - flag_timeout:
@@ -125,6 +122,7 @@ def lambda_handler(event, _, chain=None):
     """
     Insertion point for AWS Lambda
     """
+    start_time = time.time()
     # Expected format of the event object.
     # - team
 
@@ -139,12 +137,12 @@ def lambda_handler(event, _, chain=None):
     # If the values are in the event body, attempt to parse them as floats and
     # update the cache objects at the global scope.
     try:
-        TEAM_SCORE_CACHE['timeout'] = float(event['ScoreCacheLifetime'])
+        TEAM_SCORE_CACHE["timeout"] = float(event["ScoreCacheLifetime"])
     except:
         pass
 
     try:
-        FLAGS_DATA['check_interval'] = float(event['FlagCacheLifetime'])
+        FLAGS_DATA["check_interval"] = float(event["FlagCacheLifetime"])
     except:
         pass
 
@@ -153,7 +151,7 @@ def lambda_handler(event, _, chain=None):
         chain)
 
     try:
-        team = int(event['team'])
+        team = int(event["team"])
     except ValueError:
         team = None
     except KeyError:
@@ -161,18 +159,19 @@ def lambda_handler(event, _, chain=None):
 
     if team is None:
         return {
-            'ClientError':
-            ['"team" key must exist and be integeral or parsable as integral']
+            "client_error": [
+                "\"team\" key must exist and be integral or parsable as integral"
+            ]
         }
 
     # At this point, check to see if the score for the requested team still has
     # a cache entry, and check whether it is stale or not. If it is stale, then
     # recompute, otherwise return the cached value.
     if team in TEAM_SCORE_CACHE and \
-        TEAM_SCORE_CACHE[team]['time'] > (time.time() - TEAM_SCORE_CACHE['timeout']):
+        TEAM_SCORE_CACHE[team]["time"] > (start_time - TEAM_SCORE_CACHE["timeout"]):
         return {
-            'Team': str(team),
-            'Score': TEAM_SCORE_CACHE[team]['score'],
+            "team": str(team),
+            "score": TEAM_SCORE_CACHE[team]["score"],
             "annotations": {
                 "Cache": "Hit"
             }
@@ -183,19 +182,27 @@ def lambda_handler(event, _, chain=None):
 
     segment_id = chain.log_start("ScoreCalculation")
     score_chain = chain.fork_subsegment()
+
+    # Get the DynamoDB row for the team. If there is no such row, use a simple
+    # dict with the team key set to the team ID.
+    ddb_row = score_chain.trace("GetItem")(SCORES_TABLE.get_item)(Key={
+        "team": team
+    })
+    ddb_item = ddb_row.get("Item", {"team": team})
+
     for flag in flag_data:
         # For each flag DDB row, try to score each flag for the team.
-        flag_score = score_chain.trace("ScoreFlag")(score_flag)(team, flag)
-        scores.append([flag['flag'], flag_score])
+        flag_score = score_chain.trace("ScoreFlag")(score_flag)(team, flag,
+                                                                ddb_item)
+        scores.append([flag["flag"], flag_score])
         if flag_score is not None:
             score += float(flag_score)
     chain.log_end(segment_id)
-    score_chain.flush()
 
-    TEAM_SCORE_CACHE[team] = {'score': score, 'time': time.time()}
+    TEAM_SCORE_CACHE[team] = {"score": score, "time": start_time}
     return {
-        'Team': str(team),
-        'Score': score,
+        "team": str(team),
+        "score": score,
         "annotations": {
             "Cache": "Miss"
         }
