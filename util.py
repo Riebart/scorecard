@@ -78,8 +78,6 @@ def traced_lambda(name):
                 http=http,
                 metadata={"Event": metadata_event},
                 annotations=annotations)
-            root_chain.flush()
-            task_chain.flush()
             return ret
 
         return __wrapper
