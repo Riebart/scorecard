@@ -180,8 +180,8 @@ All API resources and methods permit a request origin of `*` as this exposes an 
 
   | Key | Type | Optional | Description |
   |---|---|---|---|
-  | `ValidFlag` | Boolean | No | Whether or not the flag claim was successful. If this is `true` then the flag was successfulyl claimed. |
-  | `ClientError` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
+  | `valid_flag` | Boolean | No | Whether or not the flag claim was successful. If this is `true` then the flag was successfulyl claimed. |
+  | `client_error` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
 
 - GET @ `/score/{Team}`
   - Accepts a URL parameter, such as GET@`/score/10`, and returns the current score of the team queried.
@@ -189,9 +189,9 @@ All API resources and methods permit a request origin of `*` as this exposes an 
 
   | Key | Type | Optional | Description |
   |---|---|---|---|
-  | `Team` | Integer | No | The team specified in the query. |
-  | `Score` | Number | No | The score of the team in the specified query. |
-  | `ClientError` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
+  | `team` | Integer | No | The team specified in the query. |
+  | `score` | Number | No | The score of the team in the specified query. |
+  | `client_error` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
 
 ### XRay
 
