@@ -1,19 +1,19 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  KeyValueS3Bucket:
-    Description: The bucket associated with the prefix that this stack is
-      permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
-      set to 'DynamoDB')
-    Type: String
-    Default: ''
-  KeyValueS3Prefix:
-    Description: The prefix associated with the bucket that this stack is
-      permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
-      set to 'DynamoDB')
-    Type: String
-    Default: ''
-    # Prevent people from including a starting or trailing slash.
-    AllowedPattern: '(^[^/].*[^/]$|^$)'
+  # KeyValueS3Bucket:
+  #   Description: The bucket associated with the prefix that this stack is
+  #     permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
+  #     set to 'DynamoDB')
+  #   Type: String
+  #   Default: ''
+  # KeyValueS3Prefix:
+  #   Description: The prefix associated with the bucket that this stack is
+  #     permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
+  #     set to 'DynamoDB')
+  #   Type: String
+  #   Default: ''
+  #   # Prevent people from including a starting or trailing slash.
+  #   AllowedPattern: '(^[^/].*[^/]$|^$)'
   CodeSourceBucket:
     Description: Bucket in which to find the code for the Lambda functions.
     Type: String

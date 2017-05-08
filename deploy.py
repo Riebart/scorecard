@@ -36,21 +36,23 @@ def main():
         "--backend-type",
         required=False,
         default="DynamoDB",
-        help="""Indicates either a DynamoDB or S3 backend for score-keeping.
-        If omitted, the previous the default for new stacks is DynamoDB, and
-        for stack updates, the existing value is preserved. Allowable values are
-        "DynamoDB" and "S3". If set to "S3" then both --backend-s3-bucket and
-        --backend-s3-prefix must be specified.""")
-    parser.add_argument(
-        "--backend-s3-bucket",
-        required=False,
-        default=None,
-        help="Bucket to use for S3 backend for scorekeeping")
-    parser.add_argument(
-        "--backend-s3-prefix",
-        required=False,
-        default=None,
-        help="Prefix to use for S3 backend for scorekeeping")
+        help="""Indicates backend implementation for scorkeeping.""")
+        # help="""Indicates either a DynamoDB or S3 backend for score-keeping.
+        # If omitted, the previous the default for new stacks is DynamoDB, and
+        # for stack updates, the existing value is preserved. Allowable values are
+        # "DynamoDB" and "S3". If set to "S3" then both --backend-s3-bucket and
+        # --backend-s3-prefix must be specified.""")
+        
+    # parser.add_argument(
+    #     "--backend-s3-bucket",
+    #     required=False,
+    #     default=None,
+    #     help="Bucket to use for S3 backend for scorekeeping")
+    # parser.add_argument(
+    #     "--backend-s3-prefix",
+    #     required=False,
+    #     default=None,
+    #     help="Prefix to use for S3 backend for scorekeeping")
     parser.add_argument(
         "--score-cache-lifetime",
         required=False,
@@ -64,7 +66,7 @@ def main():
     pargs = parser.parse_args()
 
     if pargs.backend_type is not None:
-        if pargs.backend_type not in ["S3", "DynamoDB"]:
+        if pargs.backend_type not in ["DynamoDB"]: #["S3", "DynamoDB"]:
             print "Backend type must be one of: S3, DynamoDB"
             exit(1)
         elif pargs.backend_type == "S3":
