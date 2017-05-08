@@ -126,10 +126,11 @@ def main():
                 json={"team": str(team[0]),
                       "flag": flag[0]},
                 headers={'Content-Type': 'application/json'})
-            assert resp.json() == {'ValidFlag': True}
+            assert resp.json() == {'valid_flag': True}
         resp = requests.get(url=api_endpoint + "/score/" + str(team[0]))
-        assert resp.json()["Score"] == score
-        print json.dumps({"Team": str(team[0]), "Score": score})
+        print resp.json()
+        assert resp.json()["score"] == score
+        print json.dumps({"team": str(team[0]), "score": score})
 
     with open("constants.js.sample_%s" % pargs.stack_name, "w") as fp:
         fp.write("var API_ENDPOINT = '%s';\n" % api_endpoint)

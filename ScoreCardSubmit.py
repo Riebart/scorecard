@@ -161,7 +161,10 @@ def lambda_handler(event, _, chain=None):
             Key={
                 "team": event["team"]
             },
-            UpdateExpression="set %s=:last_seen" % event["flag"],
+            UpdateExpression="set #flag = :last_seen",
+            ExpressionAttributeNames={
+                "#flag": event["flag"]
+            },
             ExpressionAttributeValues={
                 ":last_seen": Decimal(start_time)
             })

@@ -152,7 +152,7 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            helpful_assert_equal(resp.json(), {'ValidFlag': False})
+            helpful_assert_equal(resp.json(), {'valid_flag': False})
 
         print("    Assert that each team can claim a durable simple flag.")
         for team in [randint(10**35, 10**36) for _ in range(2)]:
@@ -162,7 +162,7 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            helpful_assert_equal(resp.json(), {'ValidFlag': True})
+            helpful_assert_equal(resp.json(), {'valid_flag': True})
             resp = requests.get(url=api_endpoint + "/score/" + str(team))
             helpful_assert_equal(resp.json(),
                                  {'score': 1.0,
@@ -182,7 +182,7 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        helpful_assert_equal(resp.json(), {'ValidFlag': False})
+        helpful_assert_equal(resp.json(), {'valid_flag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
         helpful_assert_equal(resp.json(),
                              {'score': 0.0,
@@ -198,7 +198,7 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        helpful_assert_equal(resp.json(), {'ValidFlag': True})
+        helpful_assert_equal(resp.json(), {'valid_flag': True})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
         helpful_assert_equal(resp.json(),
                              {'score': 2.0,
@@ -214,7 +214,7 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        helpful_assert_equal(resp.json(), {'ValidFlag': False})
+        helpful_assert_equal(resp.json(), {'valid_flag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
         helpful_assert_equal(resp.json(),
                              {'score': 0.0,
@@ -230,7 +230,7 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        helpful_assert_equal(resp.json(), {'ValidFlag': False})
+        helpful_assert_equal(resp.json(), {'valid_flag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
         helpful_assert_equal(resp.json(),
                              {'score': 0.0,
@@ -249,7 +249,7 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            helpful_assert_equal(resp.json(), {'ValidFlag': True})
+            helpful_assert_equal(resp.json(), {'valid_flag': True})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
             helpful_assert_equal(resp.json(), {
@@ -275,7 +275,7 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            helpful_assert_equal(resp.json(), {'ValidFlag': False})
+            helpful_assert_equal(resp.json(), {'valid_flag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
             helpful_assert_equal(resp.json(),
@@ -293,7 +293,7 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            helpful_assert_equal(resp.json(), {'ValidFlag': True})
+            helpful_assert_equal(resp.json(), {'valid_flag': True})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
             helpful_assert_equal(resp.json(), {
@@ -318,7 +318,7 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            helpful_assert_equal(resp.json(), {'ValidFlag': False})
+            helpful_assert_equal(resp.json(), {'valid_flag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
             helpful_assert_equal(resp.json(),
@@ -336,7 +336,7 @@ def integration_tests(stack_name):
                 url=api_endpoint + "/flag",
                 json=record,
                 headers={'Content-Type': 'application/json'})
-            helpful_assert_equal(resp.json(), {'ValidFlag': False})
+            helpful_assert_equal(resp.json(), {'valid_flag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
             helpful_assert_equal(resp.json(),
@@ -352,7 +352,7 @@ def integration_tests(stack_name):
             url=api_endpoint + "/flag",
             json=record,
             headers={'Content-Type': 'application/json'})
-        helpful_assert_equal(resp.json(), {'ValidFlag': True})
+        helpful_assert_equal(resp.json(), {'valid_flag': True})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
         helpful_assert_equal(resp.json(),
                              {'score': 0.0,
@@ -377,10 +377,7 @@ def integration_tests(stack_name):
         if scores_table_name is not None:
             ddb_client.delete_item(
                 TableName=scores_table_name,
-                Key={'flag': {
-                    'S': flag
-                },
-                     'team': {
+                Key={'team': {
                          'N': str(team)
                      }})
         ddb_client.delete_item(
