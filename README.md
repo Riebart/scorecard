@@ -127,11 +127,7 @@ The backend services for this are two AWS Lambda functions (Python) that interfa
 
 The backend leverages two DynamoDB tables, one that stores the possible flags (`ScoreCard-Flags`), and one that stores the state of an ongoing event (`ScoreCard-Teams`).
 
-The `Teams` table has a very simple structure that stores every valid flag claimed by a team, and the last time the flag was reported for that team.
-
-- `team` (Number) - Hash key
-- `flag` (String) - Sort key
-- `last_seen` (Number)
+The `Teams` table has a very simple structure that stores every valid flag claimed by a team, and the last time the flag was reported for that team. The table keys (hash-key) on the `team` numeric attribute, and so every team has exactly one item. A team's item contains an attribute for each flag that has been claimed by/for that team, with a numeric value set to the time that flag was last seen.
 
 The `Flags` table has a more complicated structure that stores each flag, it's accompanied weight, timeout, and authorization information.
 
@@ -145,11 +141,11 @@ The `Flags` table has a more complicated structure that stores each flag, it's a
 - `auth_key` (Map)
   - A mapping of stringifications of the team IDs to arbitrary strings that represent the key that must be supplied for a team to successfully claim this flag.
 
-### Amazon S3
+<!--### Amazon S3 (DEPRECATED)
 
 There is an alternate score-keeping backend that uses S3 as a large key-value storage platform. This backend can be chosen through the Cloudformation template parameters (exposed nicely by the `--backend-type` option to `deploy.py`).
 
-This backend is recommended for most deployments, howver it is more opaque and offers a less intuitive interface for visibility into the scores of teams. This backend will perform better and will not incur the costs associated with unused provisioned capacity, however GET operations will be charged at standard S3 rates (as of this: 0.004USD/10000 requests).
+This backend is recommended for most deployments, howver it is more opaque and offers a less intuitive interface for visibility into the scores of teams. This backend will perform better and will not incur the costs associated with unused provisioned capacity, however GET operations will be charged at standard S3 rates (as of this: 0.004USD/10000 requests).-->
 
 ### AWS Lambda functions
 
@@ -231,10 +227,3 @@ A useful one-liner for running tests inside of a docker environment:
 ```bash
 docker build -t scorecard . && docker run --rm scorecard tar -cf - htmlcov | tar -xvf -
 ```
-
-## TODO
-
-- Permit fetching scores for multiple teams in a single request
-  - Optimizes costs by reducing the number of API Gateway and lambda invocations, and amortizing overhead of lambda functions across more fetches.
-- Use Python threading to optimize the time spent fetching S3 objects for many flags and teams in a single invocation
-  - Optimizes for reducing Lambda runtime and improves repsonsiveness.
