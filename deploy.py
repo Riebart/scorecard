@@ -36,13 +36,13 @@ def main():
         "--backend-type",
         required=False,
         default="DynamoDB",
-        help="""Indicates backend implementation for scorkeeping.""")
+        help="""Indicates backend implementation for scorekeeping.""")
         # help="""Indicates either a DynamoDB or S3 backend for score-keeping.
         # If omitted, the previous the default for new stacks is DynamoDB, and
         # for stack updates, the existing value is preserved. Allowable values are
         # "DynamoDB" and "S3". If set to "S3" then both --backend-s3-bucket and
         # --backend-s3-prefix must be specified.""")
-        
+
     # parser.add_argument(
     #     "--backend-s3-bucket",
     #     required=False,
