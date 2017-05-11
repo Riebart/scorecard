@@ -1,19 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  # KeyValueS3Bucket:
-  #   Description: The bucket associated with the prefix that this stack is
-  #     permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
-  #     set to 'DynamoDB')
-  #   Type: String
-  #   Default: ''
-  # KeyValueS3Prefix:
-  #   Description: The prefix associated with the bucket that this stack is
-  #     permitted to generate presigned URLs for. (OPTIONAL if KeyValueBackend is
-  #     set to 'DynamoDB')
-  #   Type: String
-  #   Default: ''
-  #   # Prevent people from including a starting or trailing slash.
-  #   AllowedPattern: '(^[^/].*[^/]$|^$)'
   CodeSourceBucket:
     Description: Bucket in which to find the code for the Lambda functions.
     Type: String
@@ -44,17 +30,17 @@ Parameters:
       on key-value store backend.
     Type: Number
     Default: 600
-  KeyValueBackend:
-    Description: Which backend to use for key-value store for scorekeeping. This
-      only controls which backend is used for the Scores, not for the flag/game
-      definitions.
-    Type: String
-    Default: DynamoDB
-    ConstraintDescription: Must specify either 'DynamoDB'' or 'S3'
-    AllowedValues:
-    - DynamoDB
-    # - SimpleDB
-    # - S3
+  # KeyValueBackend:
+  #   Description: Which backend to use for key-value store for scorekeeping. This
+  #     only controls which backend is used for the Scores, not for the flag/game
+  #     definitions.
+  #   Type: String
+  #   Default: DynamoDB
+  #   ConstraintDescription: Must specify either 'DynamoDB'' or 'S3'
+  #   AllowedValues:
+  #   - DynamoDB
+  #   # - SimpleDB
+  #   # - S3
   XraySampleRate:
     Description: The probability that an event will be traced via Xray, expressed
       as a floating point value in [0, 1].
@@ -65,8 +51,6 @@ Parameters:
     ConstraintDescription: Value must be a probability, and thus in the range [0, 1]
 
 Conditions:
-  PrefixEmpty: !Equals [ !Ref KeyValueS3Prefix, "" ]
-  DynamoBackend: !Equals [ !Ref KeyValueBackend, DynamoDB ]
   S3Backend: !Equals [ !Ref KeyValueBackend, S3 ]
   TallyCodePlaceholder:
     !Or
@@ -91,7 +75,6 @@ Resources:
 
   ScoresTable:
     Type: AWS::DynamoDB::Table
-    Condition: DynamoBackend
     Properties:
       AttributeDefinitions:
       - {AttributeName: team, AttributeType: N}
@@ -140,8 +123,6 @@ Resources:
             - S3Backend
             - !Sub |
                 {
-                  "KeyValueS3Bucket": "${KeyValueS3Bucket}",
-                  "KeyValueS3Prefix": "${KeyValueS3Prefix}",
                   "FlagsTable": "${FlagsTable}",
                   "KeyValueBackend": "${KeyValueBackend}",
                   "ScoreCacheLifetime": "${ScoreCacheLifetime}",
@@ -229,8 +210,6 @@ Resources:
             - S3Backend
             - !Sub |
                 {
-                  "KeyValueS3Bucket": "${KeyValueS3Bucket}",
-                  "KeyValueS3Prefix": "${KeyValueS3Prefix}",
                   "FlagsTable": "${FlagsTable}",
                   "KeyValueBackend": "${KeyValueBackend}",
                   "ScoreCacheLifetime": "${ScoreCacheLifetime}",
@@ -368,24 +347,10 @@ Resources:
         - PolicyName: TallyLambdaPolicy
           PolicyDocument:
             Statement:
-              - !If
-                - DynamoBackend
-                - Action:
-                    - dynamodb:GetItem
-                  Effect: Allow
-                  Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ScoresTable}
-                - Action:
-                    - s3:GetObject
-                  Effect: Allow
-                  Resource:
-                    - !If
-                      - PrefixEmpty
-                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}
-                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/${KeyValueS3Prefix}
-                    - !If
-                      - PrefixEmpty
-                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/*
-                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/${KeyValueS3Prefix}/*
+              - Action:
+                  - dynamodb:GetItem
+                Effect: Allow
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ScoresTable}
               - Action:
                   - dynamodb:Scan
                 Effect: Allow
@@ -416,24 +381,10 @@ Resources:
         - PolicyName: SubmitLambdaPolicy
           PolicyDocument:
             Statement:
-              - !If
-                - DynamoBackend
-                - Action:
-                    - dynamodb:UpdateItem
-                  Effect: Allow
-                  Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ScoresTable}
-                - Action:
-                    - s3:PutObject
-                  Effect: Allow
-                  Resource:
-                    - !If
-                      - PrefixEmpty
-                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}
-                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/${KeyValueS3Prefix}
-                    - !If
-                      - PrefixEmpty
-                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/*
-                      - !Sub arn:aws:s3:::${KeyValueS3Bucket}/${KeyValueS3Prefix}/*
+              - Action:
+                  - dynamodb:UpdateItem
+                Effect: Allow
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ScoresTable}
               - Action:
                   - dynamodb:Scan
                 Effect: Allow
