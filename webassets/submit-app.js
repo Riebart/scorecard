@@ -30,7 +30,7 @@ myApp.controller('submissionController', ['$scope', '$rootScope', '$resource', '
 
         $scope.submitting = true;
         $scope.FlagResource.save({
-            team: parseInt($scope.teamText),
+            team: $scope.teamText,
             flag: $scope.flagText
         }, function (response) {
             if ('valid_flag' in response) {
