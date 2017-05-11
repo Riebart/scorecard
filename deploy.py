@@ -37,11 +37,11 @@ def main():
         required=False,
         default="DynamoDB",
         help="""Indicates backend implementation for scorekeeping.""")
-        # help="""Indicates either a DynamoDB or S3 backend for score-keeping.
-        # If omitted, the previous the default for new stacks is DynamoDB, and
-        # for stack updates, the existing value is preserved. Allowable values are
-        # "DynamoDB" and "S3". If set to "S3" then both --backend-s3-bucket and
-        # --backend-s3-prefix must be specified.""")
+    # help="""Indicates either a DynamoDB or S3 backend for score-keeping.
+    # If omitted, the previous the default for new stacks is DynamoDB, and
+    # for stack updates, the existing value is preserved. Allowable values are
+    # "DynamoDB" and "S3". If set to "S3" then both --backend-s3-bucket and
+    # --backend-s3-prefix must be specified.""")
 
     # parser.add_argument(
     #     "--backend-s3-bucket",
@@ -66,7 +66,7 @@ def main():
     pargs = parser.parse_args()
 
     if pargs.backend_type is not None:
-        if pargs.backend_type not in ["DynamoDB"]: #["S3", "DynamoDB"]:
+        if pargs.backend_type not in ["DynamoDB"]:  #["S3", "DynamoDB"]:
             print "Backend type must be one of: S3, DynamoDB"
             exit(1)
         elif pargs.backend_type == "S3":
@@ -131,14 +131,6 @@ def main():
                 "ParameterKey": "KeyValueBackend",
                 "UsePreviousValue": True
             })
-            stack_params.append({
-                "ParameterKey": "KeyValueS3Bucket",
-                "UsePreviousValue": True
-            })
-            stack_params.append({
-                "ParameterKey": "KeyValueS3Prefix",
-                "UsePreviousValue": True
-            })
     elif pargs.backend_type == "S3":
         print "    Configuring S3 backend (%s, %s)" % (pargs.backend_s3_bucket,
                                                        pargs.backend_s3_prefix)
@@ -146,29 +138,12 @@ def main():
             "ParameterKey": "KeyValueBackend",
             "ParameterValue": "S3"
         })
-        stack_params.append({
-            "ParameterKey": "KeyValueS3Bucket",
-            "ParameterValue": pargs.backend_s3_bucket
-        })
-        stack_params.append({
-            "ParameterKey": "KeyValueS3Prefix",
-            "ParameterValue": pargs.backend_s3_prefix
-        })
     elif pargs.backend_type == "DynamoDB":
         print "    Configuring DynamoDB backend"
         stack_params.append({
             "ParameterKey": "KeyValueBackend",
             "ParameterValue": "DynamoDB"
         })
-        if stack_description is not None:
-            stack_params.append({
-                "ParameterKey": "KeyValueS3Bucket",
-                "UsePreviousValue": True
-            })
-            stack_params.append({
-                "ParameterKey": "KeyValueS3Prefix",
-                "UsePreviousValue": True
-            })
 
     if pargs.score_cache_lifetime is not None:
         print "    Setting new score cache timeout"

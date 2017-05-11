@@ -30,17 +30,17 @@ Parameters:
       on key-value store backend.
     Type: Number
     Default: 600
-  # KeyValueBackend:
-  #   Description: Which backend to use for key-value store for scorekeeping. This
-  #     only controls which backend is used for the Scores, not for the flag/game
-  #     definitions.
-  #   Type: String
-  #   Default: DynamoDB
-  #   ConstraintDescription: Must specify either 'DynamoDB'' or 'S3'
-  #   AllowedValues:
-  #   - DynamoDB
-  #   # - SimpleDB
-  #   # - S3
+  KeyValueBackend:
+    Description: Which backend to use for key-value store for scorekeeping. This
+      only controls which backend is used for the Scores, not for the flag/game
+      definitions.
+    Type: String
+    Default: DynamoDB
+    ConstraintDescription: Must specify either 'DynamoDB'' or 'S3'
+    AllowedValues:
+    - DynamoDB
+    # - SimpleDB
+    # - S3
   XraySampleRate:
     Description: The probability that an event will be traced via Xray, expressed
       as a floating point value in [0, 1].
@@ -51,7 +51,6 @@ Parameters:
     ConstraintDescription: Value must be a probability, and thus in the range [0, 1]
 
 Conditions:
-  S3Backend: !Equals [ !Ref KeyValueBackend, S3 ]
   TallyCodePlaceholder:
     !Or
     - !Equals [ !Ref CodeSourceBucket, "" ]
@@ -119,29 +118,17 @@ Resources:
         PassthroughBehavior: WHEN_NO_TEMPLATES
         RequestTemplates:
           application/json:
-            !If
-            - S3Backend
-            - !Sub |
-                {
-                  "FlagsTable": "${FlagsTable}",
-                  "KeyValueBackend": "${KeyValueBackend}",
-                  "ScoreCacheLifetime": "${ScoreCacheLifetime}",
-                  "FlagCacheLifetime": "${FlagCacheLifetime}",
-                  "team": "$input.path('$.team')",
-                  "flag": "$input.path('$.flag')",
-                  "auth_key": "$input.path('$.auth_key')"
-                }
-            - !Sub |
-                {
-                  "ScoresTable": "${ScoresTable}",
-                  "FlagsTable": "${FlagsTable}",
-                  "KeyValueBackend": "${KeyValueBackend}",
-                  "ScoreCacheLifetime": "${ScoreCacheLifetime}",
-                  "FlagCacheLifetime": "${FlagCacheLifetime}",
-                  "team": "$input.path('$.team')",
-                  "flag": "$input.path('$.flag')",
-                  "auth_key": "$input.path('$.auth_key')"
-                }
+            !Sub |
+              {
+                "ScoresTable": "${ScoresTable}",
+                "FlagsTable": "${FlagsTable}",
+                "KeyValueBackend": "${KeyValueBackend}",
+                "ScoreCacheLifetime": "${ScoreCacheLifetime}",
+                "FlagCacheLifetime": "${FlagCacheLifetime}",
+                "team": "$input.path('$.team')",
+                "flag": "$input.path('$.flag')",
+                "auth_key": "$input.path('$.auth_key')"
+              }
   FlagOptions:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -206,25 +193,15 @@ Resources:
         PassthroughBehavior: WHEN_NO_TEMPLATES
         RequestTemplates:
           application/json:
-            !If
-            - S3Backend
-            - !Sub |
-                {
-                  "FlagsTable": "${FlagsTable}",
-                  "KeyValueBackend": "${KeyValueBackend}",
-                  "ScoreCacheLifetime": "${ScoreCacheLifetime}",
-                  "FlagCacheLifetime": "${FlagCacheLifetime}",
-                  "team": "$input.params('Team')"
-                }
-            - !Sub |
-                {
-                  "ScoresTable": "${ScoresTable}",
-                  "FlagsTable": "${FlagsTable}",
-                  "KeyValueBackend": "${KeyValueBackend}",
-                  "ScoreCacheLifetime": "${ScoreCacheLifetime}",
-                  "FlagCacheLifetime": "${FlagCacheLifetime}",
-                  "team": "$input.params('Team')"
-                }
+            !Sub |
+              {
+                "ScoresTable": "${ScoresTable}",
+                "FlagsTable": "${FlagsTable}",
+                "KeyValueBackend": "${KeyValueBackend}",
+                "ScoreCacheLifetime": "${ScoreCacheLifetime}",
+                "FlagCacheLifetime": "${FlagCacheLifetime}",
+                "team": "$input.params('Team')"
+              }
   ScoreOptions:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -293,7 +270,7 @@ Resources:
       Description: Ingest a submission and update the key-value backend tables
         appropriately.
       Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${SubmitLambdaRole}
-      MemorySize: "384"
+      MemorySize: "128"
       Timeout: "5"
       Environment:
         Variables:
@@ -317,7 +294,7 @@ Resources:
       Description: Given a team ID, tally the score for that team from the key-value
         backend.
       Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${TallyLambdaRole}
-      MemorySize: "384"
+      MemorySize: "128"
       Timeout: "5"
       Environment:
         Variables:
