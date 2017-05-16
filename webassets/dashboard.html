@@ -26,9 +26,9 @@
                     <th style="width:25%;text-align:center;">Team</th>
                     <th style="width:25%;text-align:center;">Score</th>
                 </tr>
-                <tr ng-repeat="(team, score) in scores">
-                    <td style="text-align:center;">{{team}}</td>
-                    <td style="text-align:center;">{{score}}</td>
+                <tr ng-repeat="pair in scores | toArray | orderBy:'team'">
+                    <td style="text-align:center;">{{pair.team}}</td>
+                    <td style="text-align:center;">{{pair.score}}</td>
                 </tr>
             </table>
         </div>

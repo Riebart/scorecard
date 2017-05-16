@@ -1,5 +1,15 @@
 var myApp = angular.module('dashboardApp', ['ngResource']);
 
+myApp.filter("toArray", function(){
+    return function(obj) {
+        var result = [];
+        angular.forEach(obj, function(val, key) {
+            result.push({"team": key, "score": val});
+        });
+        return result;
+    };
+});
+
 myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '$timeout', function ($scope, $rootScope, $resource, $timeout) {
 
     $scope.init = function () {
