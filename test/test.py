@@ -117,8 +117,8 @@ def integration_tests(stack_name):
     except IndexError:
         scores_table_name = None
 
-    if [p for p in stack_parameters if p['ParameterKey'] == 'KeyValueBackend'][
-            0]['ParameterValue'] == 'S3':
+    if [p for p in stack_parameters if p['ParameterKey'] == 'KeyValueBackend'
+        ][0]['ParameterValue'] == 'S3':
         scores_table_name = None
 
     print("Inserting flag configuration into DynamoDB...")
@@ -140,9 +140,10 @@ def integration_tests(stack_name):
         print("    Assert that a team's default score is 0")
         for team in [randint(10**35, 10**36) for _ in range(2)]:
             resp = requests.get(url=api_endpoint + "/score/" + str(team))
-            helpful_assert_equal(resp.json(),
-                                 {'score': 0.0,
-                                  'team': str(team)})
+            helpful_assert_equal(resp.json(), {
+                'score': 0.0,
+                'team': str(team)
+            })
 
         print("    Assert that each team cannot claim a non-existent flag")
         for team in [randint(10**35, 10**36) for _ in range(2)]:
@@ -151,7 +152,9 @@ def integration_tests(stack_name):
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
-                headers={'Content-Type': 'application/json'})
+                headers={
+                    'Content-Type': 'application/json'
+                })
             helpful_assert_equal(resp.json(), {'valid_flag': False})
 
         print("    Assert that each team can claim a durable simple flag.")
@@ -161,12 +164,15 @@ def integration_tests(stack_name):
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
-                headers={'Content-Type': 'application/json'})
+                headers={
+                    'Content-Type': 'application/json'
+                })
             helpful_assert_equal(resp.json(), {'valid_flag': True})
             resp = requests.get(url=api_endpoint + "/score/" + str(team))
-            helpful_assert_equal(resp.json(),
-                                 {'score': 1.0,
-                                  'team': str(team)})
+            helpful_assert_equal(resp.json(), {
+                'score': 1.0,
+                'team': str(team)
+            })
 
         print(
             "    Assert that an authenticated flag can only be claimed by the right team"
@@ -181,12 +187,15 @@ def integration_tests(stack_name):
         resp = requests.post(
             url=api_endpoint + "/flag",
             json=record,
-            headers={'Content-Type': 'application/json'})
+            headers={
+                'Content-Type': 'application/json'
+            })
         helpful_assert_equal(resp.json(), {'valid_flag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        helpful_assert_equal(resp.json(),
-                             {'score': 0.0,
-                              'team': str(record['team'])})
+        helpful_assert_equal(resp.json(), {
+            'score': 0.0,
+            'team': str(record['team'])
+        })
         print("      Right team right key...")
         record = {
             'team': list(flags[1]['auth_key'].keys())[0],
@@ -197,12 +206,15 @@ def integration_tests(stack_name):
         resp = requests.post(
             url=api_endpoint + "/flag",
             json=record,
-            headers={'Content-Type': 'application/json'})
+            headers={
+                'Content-Type': 'application/json'
+            })
         helpful_assert_equal(resp.json(), {'valid_flag': True})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        helpful_assert_equal(resp.json(),
-                             {'score': 2.0,
-                              'team': str(record['team'])})
+        helpful_assert_equal(resp.json(), {
+            'score': 2.0,
+            'team': str(record['team'])
+        })
         print("      Wrong team right key...")
         record = {
             'team': randint(10**35, 10**36),
@@ -213,12 +225,15 @@ def integration_tests(stack_name):
         resp = requests.post(
             url=api_endpoint + "/flag",
             json=record,
-            headers={'Content-Type': 'application/json'})
+            headers={
+                'Content-Type': 'application/json'
+            })
         helpful_assert_equal(resp.json(), {'valid_flag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        helpful_assert_equal(resp.json(),
-                             {'score': 0.0,
-                              'team': str(record['team'])})
+        helpful_assert_equal(resp.json(), {
+            'score': 0.0,
+            'team': str(record['team'])
+        })
         print("      Wrong team wrong key...")
         record = {
             'team': randint(10**35, 10**36),
@@ -229,12 +244,15 @@ def integration_tests(stack_name):
         resp = requests.post(
             url=api_endpoint + "/flag",
             json=record,
-            headers={'Content-Type': 'application/json'})
+            headers={
+                'Content-Type': 'application/json'
+            })
         helpful_assert_equal(resp.json(), {'valid_flag': False})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        helpful_assert_equal(resp.json(),
-                             {'score': 0.0,
-                              'team': str(record['team'])})
+        helpful_assert_equal(resp.json(), {
+            'score': 0.0,
+            'team': str(record['team'])
+        })
 
         for flag_num in [2, 4]:
             print(
@@ -248,7 +266,9 @@ def integration_tests(stack_name):
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
-                headers={'Content-Type': 'application/json'})
+                headers={
+                    'Content-Type': 'application/json'
+                })
             helpful_assert_equal(resp.json(), {'valid_flag': True})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
@@ -259,9 +279,10 @@ def integration_tests(stack_name):
             time.sleep(1.5 * float(flags[flag_num]['timeout']))
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            helpful_assert_equal(resp.json(),
-                                 {'score': 0.0,
-                                  'team': str(record['team'])})
+            helpful_assert_equal(resp.json(), {
+                'score': 0.0,
+                'team': str(record['team'])
+            })
 
             print("    Recovable alive flags with auth keys for the...")
             print("      Right team wrong key")
@@ -274,13 +295,16 @@ def integration_tests(stack_name):
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
-                headers={'Content-Type': 'application/json'})
+                headers={
+                    'Content-Type': 'application/json'
+                })
             helpful_assert_equal(resp.json(), {'valid_flag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            helpful_assert_equal(resp.json(),
-                                 {'score': 0.0,
-                                  'team': str(record['team'])})
+            helpful_assert_equal(resp.json(), {
+                'score': 0.0,
+                'team': str(record['team'])
+            })
 
             print("      Right team right key")
             record = {
@@ -292,7 +316,9 @@ def integration_tests(stack_name):
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
-                headers={'Content-Type': 'application/json'})
+                headers={
+                    'Content-Type': 'application/json'
+                })
             helpful_assert_equal(resp.json(), {'valid_flag': True})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
@@ -303,9 +329,10 @@ def integration_tests(stack_name):
             time.sleep(1.5 * float(flags[flag_num + 1]['timeout']))
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            helpful_assert_equal(resp.json(),
-                                 {'score': 0.0,
-                                  'team': str(record['team'])})
+            helpful_assert_equal(resp.json(), {
+                'score': 0.0,
+                'team': str(record['team'])
+            })
 
             print("      Wrong team right key")
             record = {
@@ -317,13 +344,16 @@ def integration_tests(stack_name):
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
-                headers={'Content-Type': 'application/json'})
+                headers={
+                    'Content-Type': 'application/json'
+                })
             helpful_assert_equal(resp.json(), {'valid_flag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            helpful_assert_equal(resp.json(),
-                                 {'score': 0.0,
-                                  'team': str(record['team'])})
+            helpful_assert_equal(resp.json(), {
+                'score': 0.0,
+                'team': str(record['team'])
+            })
 
             print("      Wrong team wrong key")
             record = {
@@ -335,13 +365,16 @@ def integration_tests(stack_name):
             resp = requests.post(
                 url=api_endpoint + "/flag",
                 json=record,
-                headers={'Content-Type': 'application/json'})
+                headers={
+                    'Content-Type': 'application/json'
+                })
             helpful_assert_equal(resp.json(), {'valid_flag': False})
             resp = requests.get(
                 url=api_endpoint + "/score/" + str(record['team']))
-            helpful_assert_equal(resp.json(),
-                                 {'score': 0.0,
-                                  'team': str(record['team'])})
+            helpful_assert_equal(resp.json(), {
+                'score': 0.0,
+                'team': str(record['team'])
+            })
 
         print(
             "    Confirm that revocable-dead flags only count after they expire"
@@ -351,17 +384,21 @@ def integration_tests(stack_name):
         resp = requests.post(
             url=api_endpoint + "/flag",
             json=record,
-            headers={'Content-Type': 'application/json'})
+            headers={
+                'Content-Type': 'application/json'
+            })
         helpful_assert_equal(resp.json(), {'valid_flag': True})
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        helpful_assert_equal(resp.json(),
-                             {'score': 0.0,
-                              'team': str(record['team'])})
+        helpful_assert_equal(resp.json(), {
+            'score': 0.0,
+            'team': str(record['team'])
+        })
         time.sleep(1.5 * float(flags[6]['timeout']))
         resp = requests.get(url=api_endpoint + "/score/" + str(record['team']))
-        helpful_assert_equal(resp.json(),
-                             {'score': 7.0,
-                              'team': str(record['team'])})
+        helpful_assert_equal(resp.json(), {
+            'score': 7.0,
+            'team': str(record['team'])
+        })
 
     except Exception as e:
         print("Tests Unsuccessful")
@@ -376,20 +413,25 @@ def integration_tests(stack_name):
         team = record['team']
         if scores_table_name is not None:
             ddb_client.delete_item(
-                TableName=scores_table_name,
-                Key={'team': {
-                         'N': str(team)
-                     }})
+                TableName=scores_table_name, Key={
+                    'team': {
+                        'N': str(team)
+                    }
+                })
         ddb_client.delete_item(
-            TableName=flags_table_name, Key={'flag': {
-                'S': flag
-            }})
+            TableName=flags_table_name, Key={
+                'flag': {
+                    'S': flag
+                }
+            })
 
     for flag in flags:
         ddb_client.delete_item(
-            TableName=flags_table_name, Key={'flag': {
-                'S': flag['flag']
-            }})
+            TableName=flags_table_name, Key={
+                'flag': {
+                    'S': flag['flag']
+                }
+            })
 
     print("Cleanup successful")
 
@@ -582,7 +624,7 @@ def create_s3_bucket():
     return bucket_name
 
 
-def main():
+def __main():
     """
     Main method for running tests and generating table data.
     """
@@ -605,4 +647,4 @@ if __name__ == "__main__":
     # Configure the default region for boto3/moto.
     import os
     os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
-    main()
+    __main()
