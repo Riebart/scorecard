@@ -319,7 +319,8 @@ class Chain(object):
             return 0
 
         nsegments = len(self.segments)
-        if Chain.__client is not None:
+        if Chain.__client is not None and \
+            not os.environ.get("SQUELCH_XRAY", "FALSE") == "TRUE":
             for segment in self.segments:
                 sys.stderr.write(segment + "\n")
             sys.stderr.write("Submitting %d segments\n" % len(self.segments))
@@ -332,7 +333,8 @@ class Chain(object):
                 "NoneClient": Chain.__client is None,
                 "ExplicitlyMocked": self.mock
             }
-        if Chain.__client is not None:
+        if Chain.__client is not None and \
+            not os.environ.get("SQUELCH_XRAY", "FALSE") == "TRUE":
             sys.stderr.write(json.dumps(resp) + "\n")
         self.segments = []
         self.flush_lock.release()
