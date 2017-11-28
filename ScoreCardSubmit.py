@@ -75,7 +75,7 @@ def update_flag_data(chain):
 
 
 @traced_lambda("ScorecardSubmit")
-def lambda_handler(event, _, chain=None):
+def lambda_handler(event, context, chain=None):
     """
     Insertion point for AWS Lambda
     """
@@ -134,7 +134,8 @@ def lambda_handler(event, _, chain=None):
     # Look for the flag in the flags table.
     # flag_item = FLAGS_TABLE.get_item(Key={'flag': str(event['flag'])})
     flag_items = [
-        flag for flag in flag_data if flag['flag'] == str(event['flag'])
+        flag for flag in flag_data
+        if unicode(flag['flag']) == unicode(event['flag'])
     ]
 
     if len(flag_items) == 0:
@@ -153,9 +154,16 @@ def lambda_handler(event, _, chain=None):
 
             # Check if the auth_key provided matches the auth_key for the flag
             # for this team.
-            if str(event['team']) not in flag_item['auth_key'] or event[
-                    'auth_key'] != flag_item['auth_key'][str(event['team'])]:
+            if str(
+                    event['team']
+            ) not in flag_item['auth_key'] or event['auth_key'] != flag_item['auth_key'][str(
+                    event['team'])]:
                 return {'valid_flag': False}
+
+        try:
+            claim_time = context.sim_time
+        except:
+            claim_time = time.time()
 
         chain.trace("FlagSubmit")(SCORES_TABLE.update_item)(
             Key={
@@ -166,6 +174,6 @@ def lambda_handler(event, _, chain=None):
                 "#flag": event["flag"]
             },
             ExpressionAttributeValues={
-                ":last_seen": Decimal(start_time)
+                ":last_seen": Decimal(claim_time)
             })
         return {'valid_flag': True}
