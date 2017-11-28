@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+    <meta charset="UTF-8">
+    <title>ScoreCard Replay Interface</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+    <!--<link rel="stylesheet" href="stylesheet.css" type="text/css" charset="utf-8" />-->
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-resource.js"></script>
+    <!-- This is the file that contains the API gateway endpoint and default channel name -->
+    <script src="constants.js"></script>
+    <!-- Angularjs app and controllers -->
+    <script src="postmortem-app.js"></script>
+    <style>
+        th.rotate {
+        /* Something you can count on */
+        /* height: 140px; */
+        white-space: nowrap;
+        }
+
+        th.rotate > div {
+        transform: 
+            /* Magic Numbers */
+            translate(0px, 0px)
+            /* 45 is really 360 - 45 */
+            rotate(315deg);
+        width: 30px;
+        }
+        th.rotate > div > span {
+        border-bottom: 1px solid #ccc;
+        padding: 5px 10px;
+        }
+    </style>
+</head>
+
+<body ng-app="postmortemApp" style="text-align:center">
+    <header>
+    </header>
+    <div id="wrapper" style="vertical-align:middle;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%)">
+        <div ng-controller="postmortemController" class="scores">
+            <div ng-show="loading">
+                <label style="float:center;color:darkorange">Loading scores...</label>
+            </div>
+            <div ng-show="!loading">
+                <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;width:100%">
+                    <tr>
+                            <th style="text-align:center;padding:5px;width:fit-content;white-space: nowrap">Team</th>
+                            <th style="text-align:center;padding:5px">Score</th>
+                        <!-- Ref: https://css-tricks.com/rotated-table-column-headers/ -->
+                        <th class="rotate" ng-repeat="flag in flagNames">
+                            <div><span>{{flag}}</span></div></th>
+                    </tr>
+                    <tr ng-repeat="(team, flags) in teamFlags | orderBy: team">
+                        <td style="text-align:center;width:fit-content;white-space: nowrap">{{$parent.teamNames[team]}}</td>
+                        <td style="text-align:center;">{{$parent.teamScores[team]}}</td>
+                        <td ng-repeat="flag in flags track by $index" ng-style="{'background-color':(flag ? '#8f8' : '#f88')}">
+                            <!-- <span ng-show="!flag" style="background-color:red"></span> -->
+                            <!-- <span ng-show="flag" style="background-color:green"></span> -->
+                        </td>
+                    </tr>
+                </table>
+                <div>Timestamp of displayed table: <b>{{curSnapTimestamp}}</b></div>
+                <br/><br/>
+                <label style="float:center;color:darkgreen">Loading complete in {{loadTime / 1000.0}} seconds.</label>
+                <input type="range" ng-change="sliderChange()" ng-model="snapNum" min="1" max="{{numSnapshots}}" value="1" class="slider" id="snapshotSlider">
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
