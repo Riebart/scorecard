@@ -4,4 +4,5 @@ RUN yum install -y python27-pip && \
 WORKDIR /root
 ENTRYPOINT [ "bash", "test/test.sh" ]
 ENV MOCK_XRAY TRUE
+ENV SQUELCH_XRAY TRUE
 COPY . .
