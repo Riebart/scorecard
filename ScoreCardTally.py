@@ -80,7 +80,7 @@ def update_flag_data(chain):
     return FLAGS_DATA["flags"]
 
 
-def score_flag(team, flag, item):
+def score_flag(team, flag, item, sim_time):
     """
     Given a team ID, and a flag DynamoDB row.
     """
@@ -104,12 +104,12 @@ def score_flag(team, flag, item):
             if "yes" not in flag or flag["yes"]:
                 # If the flag was NOT seen in the last flag_timeout seconds,
                 # then return nothing.
-                if last_seen < time.time() - flag_timeout:
+                if last_seen < sim_time - flag_timeout:
                     return None
             else:
                 # If the flag WAS seen in the last flag_timeout seconds, then
                 # return nothing.
-                if last_seen > time.time() - flag_timeout:
+                if last_seen > sim_time - flag_timeout:
                     return None
 
         return flag_weight
@@ -117,8 +117,16 @@ def score_flag(team, flag, item):
         return None
 
 
+def score_bitmask(scores):
+    """
+    Given a list of tuple pairings from the score key name to the score value, canonically sort
+    the list by the score key name, and convert the values to boolean (with TRUE <=> != 0)
+    """
+    return [(pair[1] not in [0.0, None]) for pair in sorted(scores)]
+
+
 @traced_lambda("ScorecardTally")
-def lambda_handler(event, _, chain=None):
+def lambda_handler(event, context, chain=None):
     """
     Insertion point for AWS Lambda
     """
@@ -167,11 +175,17 @@ def lambda_handler(event, _, chain=None):
     # At this point, check to see if the score for the requested team still has
     # a cache entry, and check whether it is stale or not. If it is stale, then
     # recompute, otherwise return the cached value.
-    if team in TEAM_SCORE_CACHE and \
+    try:
+        disable_cache = context.disable_cache
+    except:  # pylint: disable=W0702
+        disable_cache = False
+
+    if not disable_cache and team in TEAM_SCORE_CACHE and \
         TEAM_SCORE_CACHE[team]["time"] > (start_time - TEAM_SCORE_CACHE["timeout"]):
         return {
             "team": str(team),
             "score": TEAM_SCORE_CACHE[team]["score"],
+            "bitmask": TEAM_SCORE_CACHE[team]["bitmask"],
             "annotations": {
                 "Cache": "Hit"
             }
@@ -191,18 +205,30 @@ def lambda_handler(event, _, chain=None):
     ddb_item = ddb_row.get("Item", {"team": team})
 
     for flag in flag_data:
+        try:
+            sim_time = context.sim_time
+        except:  # pylint: disable=W0702
+            sim_time = time.time()
+
         # For each flag DDB row, try to score each flag for the team.
-        flag_score = score_chain.trace("ScoreFlag")(score_flag)(team, flag,
-                                                                ddb_item)
+        flag_score = score_chain.trace("ScoreFlag")(score_flag)(
+            team, flag, ddb_item, sim_time)
         scores.append([flag["flag"], flag_score])
         if flag_score is not None:
             score += float(flag_score)
+
+    bitmask = score_bitmask(scores)
     chain.log_end(segment_id)
 
-    TEAM_SCORE_CACHE[team] = {"score": score, "time": start_time}
+    TEAM_SCORE_CACHE[team] = {
+        "score": score,
+        "time": start_time,
+        "bitmask": bitmask
+    }
     return {
         "team": str(team),
         "score": score,
+        "bitmask": bitmask,
         "annotations": {
             "Cache": "Miss"
         }
