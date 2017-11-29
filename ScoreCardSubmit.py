@@ -3,10 +3,13 @@
 Ingest a flag and update the DynamoDB table accordingly.
 """
 
+import os
+import json
 import time
 from decimal import Decimal
-import boto3
+from datetime import datetime
 
+import boto3
 from S3KeyValueStore import Table as S3Table
 from util import traced_lambda
 
@@ -97,6 +100,13 @@ def lambda_handler(event, context, chain=None):
 
     # If the values are in the event body, attempt to parse them as floats and
     # update the cache objects at the global scope.
+
+    if os.environ.get("SCORECARD_LOG_EVENTS", None) is not None:
+        logged_event = dict()
+        logged_event.update(event)
+        logged_event["timestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        print json.dumps(logged_event)
+
     try:
         FLAGS_DATA['check_interval'] = float(event['FlagCacheLifetime'])
     except:
