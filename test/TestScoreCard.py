@@ -28,7 +28,7 @@ def helpful_assert_equal(lhs, rhs):
     except AssertionError as e:
         print("LHS:", lhs, file=sys.stderr)
         print("RHS:", rhs, file=sys.stderr)
-        print(traceback.format_exc())
+        print("\n".join(traceback.format_stack()), file=sys.stderr)
         raise e
 
 class ScoreCardTest(unittest.TestCase):
@@ -342,8 +342,11 @@ class BackendTest(ScoreCardTest):
             res = ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             helpful_assert_equal(res, {"valid_flag": True})
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, 
-            {"team": event["team"], "score": 1.0, "bitmask": [True] + [False] * (len(flags) - 1)})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 1.0,
+                "bitmask": [True] + [False] * (len(flags) - 1)
+            })
 
     def test_score_cache_lifetime_precision(self):
         """
@@ -359,7 +362,12 @@ class BackendTest(ScoreCardTest):
                 event["ScoreCacheLifetime"] = cache_lifetime
                 t0 = time.time()
                 res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-                helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+                helpful_assert_equal(
+                    res, {
+                        "team": event["team"],
+                        "score": 0.0,
+                        "bitmask": [False] * len(flags)
+                    })
                 res = ScoreCardSubmit.lambda_handler(
                     copy.deepcopy(event), None)
                 helpful_assert_equal(res, {"valid_flag": True})
@@ -383,12 +391,20 @@ class BackendTest(ScoreCardTest):
             for cache_lifetime in [0, 1, 2, 3, 4, 5]:
                 reload(ScoreCardSubmit)
                 reload(ScoreCardTally)
-                flag = str(uuid.uuid1())
+
+                # For this flag, we need to know where in the bitmask it will be, relative to the
+                # other flag UUID strings. By setting it to this, we know it'll always be at the end
+                flag = "ffffffff-ffff-ffff-ffff-ffffffffffff"
 
                 event["team"] = str(randint(10**35, 10**36))
                 event["flag"] = flag
                 event["FlagCacheLifetime"] = cache_lifetime
                 event["ScoreCacheLifetime"] = 0
+
+                # To ensure that flags table is in a predictable state at the start of each round,
+                # ensure that the flag we're using doesn't have a row in it. Deleting the row before
+                # it exists (on the first iteration) isn't an issue.
+                tbl.delete_item(Key={"flag": flag})
 
                 # Submit the not-yet-existent flag, to put the flags into the submission cache
                 # Tally the score to put the flags into the tally cache
@@ -396,7 +412,11 @@ class BackendTest(ScoreCardTest):
                 # Spin, submitting and tallying until the flag registers, and the score registers
                 t0 = time.time()
                 res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-                helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+                helpful_assert_equal(res, {
+                    "team": event["team"],
+                    "score": 0.0,
+                    "bitmask": [False] * (len(event["Flags"]))
+                })
                 res = ScoreCardSubmit.lambda_handler(
                     copy.deepcopy(event), None)
                 helpful_assert_equal(res, {"valid_flag": False})
@@ -411,7 +431,12 @@ class BackendTest(ScoreCardTest):
                         break
 
                 res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-                helpful_assert_equal(res, {"team": event["team"], "score": 1.0})
+                helpful_assert_equal(
+                    res, {
+                        "team": event["team"],
+                        "score": 1.0,
+                        "bitmask": ([False] * len(event["Flags"])) + [True]
+                    })
 
                 cache_delay = time.time() - t0
                 assert cache_delay > cache_lifetime
@@ -524,7 +549,11 @@ class BackendTest(ScoreCardTest):
         for event in self.events:
             event["team"] = str(randint(10**35, 10**36))
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 0.0,
+                "bitmask": [False] * len(event["Flags"])
+            })
 
     def test_tally_simple_cached(self):
         """
@@ -535,17 +564,32 @@ class BackendTest(ScoreCardTest):
             event["team"] = str(randint(10**35, 10**36))
             event["flag"] = flags[0]["flag"]
             event["ScoreCacheLifetime"] = 10
+
+            bitmask = [(event["flag"] == eflag["flag"]) for eflag in event["Flags"]]
+
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 0.0,
+                "bitmask": [False] * len(bitmask)
+            })
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 0.0,
+                "bitmask": [False] * len(bitmask)
+            })
 
             # Override the team score cache to get real-time updates on scores
             event["ScoreCacheLifetime"] = 0
 
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 1.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 1.0,
+                "bitmask": bitmask
+            })
 
     def test_tally_revocable_alive1(self):
         """
@@ -556,12 +600,24 @@ class BackendTest(ScoreCardTest):
             event["team"] = str(randint(10**35, 10**36))
             event["flag"] = flags[2]["flag"]
             event["ScoreCacheLifetime"] = 0
+
+            bitmask = [(event["flag"] == eflag["flag"])
+                       for eflag in event["Flags"]]
+
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 3.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 3.0,
+                "bitmask": bitmask
+            })
             time.sleep(1.5 * float(flags[2]["timeout"]))
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 0.0,
+                "bitmask": [False] * len(bitmask)
+            })
 
     def test_tally_revocable_alive2(self):
         """
@@ -572,12 +628,23 @@ class BackendTest(ScoreCardTest):
             event["team"] = str(randint(10**35, 10**36))
             event["flag"] = flags[4]["flag"]
             event["ScoreCacheLifetime"] = 0
+
+            bitmask = [(event["flag"] == eflag["flag"]) for eflag in event["Flags"]]
+
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 5.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 5.0,
+                "bitmask": bitmask
+            })
             time.sleep(1.5 * float(flags[4]["timeout"]))
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 0.0,
+                "bitmask": [False] * len(bitmask)
+            })
 
     def test_tally_revocable_dead1(self):
         """
@@ -588,12 +655,24 @@ class BackendTest(ScoreCardTest):
             event["team"] = str(randint(10**35, 10**36))
             event["flag"] = flags[6]["flag"]
             event["ScoreCacheLifetime"] = 0
+
+            bitmask = [(event["flag"] == eflag["flag"]) for eflag in event["Flags"]]
+
+
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 0.0,
+                "bitmask": [False] * len(bitmask)
+            })
             time.sleep(1.5 * float(flags[6]["timeout"]))
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 7.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 7.0,
+                "bitmask": bitmask
+            })
 
     def test_unweighted_flag(self):
         """
@@ -604,9 +683,14 @@ class BackendTest(ScoreCardTest):
             event["team"] = str(randint(10**35, 10**36))
             event["flag"] = flags[-1]["flag"]
             event["ScoreCacheLifetime"] = 0
+
             ScoreCardSubmit.lambda_handler(copy.deepcopy(event), None)
             res = ScoreCardTally.lambda_handler(copy.deepcopy(event), None)
-            helpful_assert_equal(res, {"team": event["team"], "score": 0.0})
+            helpful_assert_equal(res, {
+                "team": event["team"],
+                "score": 0.0,
+                "bitmask": [False] * len(event["Flags"])
+            })
 
 
 class XraySamplingTests(ScoreCardTest):
