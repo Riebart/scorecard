@@ -275,6 +275,7 @@ Resources:
       Environment:
         Variables:
           XraySampleRate: !Ref XraySampleRate
+          SCORECARD_LOG_EVENTS: "TRUE"
       Runtime: python2.7
       Handler: ScoreCardSubmit.lambda_handler
       Code:
