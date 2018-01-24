@@ -187,6 +187,7 @@ All API resources and methods permit a request origin of `*` as this exposes an 
   |---|---|---|---|
   | `team` | Integer | No | The team specified in the query. |
   | `score` | Number | No | The score of the team in the specified query. |
+  | `bitmask` | Array of `bool` | No | An array of boolean values that indicates which flags (in an arbitrary but consistent order) the queried team has claimed. |
   | `client_error` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
 
 ### XRay
