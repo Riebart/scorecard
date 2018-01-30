@@ -1,10 +1,10 @@
 var myApp = angular.module('dashboardApp', ['ngResource']);
 
-myApp.filter("toArray", function(){
-    return function(obj) {
+myApp.filter("toArray", function () {
+    return function (obj) {
         var result = [];
-        angular.forEach(obj, function(val, key) {
-            result.push({"team": key, "score": val});
+        angular.forEach(obj, function (val, key) {
+            result.push({ "team": key, "score": val });
         });
         return result;
     };
@@ -15,6 +15,7 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
     $scope.init = function () {
         // The scores, on initialization, are an empty list.
         $scope.scores = {};
+        $scope.scoresBack = {};
         $scope.team_names = {};
         $scope.ScoresResource = $resource(API_ENDPOINT + "/score/:team");
     };
@@ -37,28 +38,45 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
             $scope.ScoresResource.get({
                 team: team_id.toString()
             }, function (score) {
-                $scope.scores[$scope.team_names[score.team]] = score.score;
+                $scope.scoresBack[$scope.team_names[score.team]] = score.score;
             });
         }
         return true;
     }
 
     $scope.ScoresRefresh = function () {
-        $scope.PopulateScores();
         var poll = function () {
             $timeout(function () {
                 if ($scope.PopulateScores()) {
                     poll();
                 }
-            }, 10000);
+            }, 30000);
         };
         poll();
     };
 
-    $scope.$on('async_init', function () {
-        $scope.init();
-        $scope.ScoresRefresh();
-    });
+    $scope.ScoresRefreshOnce = function () {
+        $scope.PopulateScores();
 
-    $scope.$emit('async_init');
+    };
+
+    $scope.ScorePresent = function () {
+        $scope.scores = Object.keys($scope.scoresBack).map(function (key) {
+            return { "team": key, "score": $scope.scoresBack[key] };
+        }).sort(function (a, b) {
+            return b.team < a.team;
+        });
+        $timeout(function () {
+            $scope.ScorePresent();
+        }, 30000);
+    };
+
+    $scope.init();
+    $scope.ScoresRefreshOnce();
+
+    // 5 seconds should be plenty for the initial scores to arrive, so wait that long and then
+    // present them.
+    $timeout(function () {
+        $scope.ScorePresent();
+    }, 5000);
 }]);
