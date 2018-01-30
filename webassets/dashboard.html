@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>ScoreCard Dashboard</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+    
     <!--<link rel="stylesheet" href="stylesheet.css" type="text/css" charset="utf-8" />-->
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-resource.js"></script>
@@ -12,25 +13,40 @@
     <!-- Angularjs app and controllers -->
     <script src="dashboard-app.js"></script>
 </head>
-<body ng-app="dashboardApp" style="text-align:center">
+<body ng-app="dashboardApp" style="text-align:center;background-color: gray;">
     <header>
         <!--<div id="square"></div>-->
         <!--<img id="logo" src="assets/images/logo.svg" style="padding-left:3em; padding-right:1em;"/>-->
         <!--<div id="main-header"><img src="assets/images/title.svg"></div>-->
         <!--<img id="org-logo" src="assets/images/org-logo.svg"/>-->
     </header>
-    <div id="wrapper" style="vertical-align:middle;position: absolute;top:50%;left:50%;transform:translate(-50%, -50%)">
+    <div id="wrapper" class="container" style="vertical-align:middle;position: absolute;top:50%;left:50%;transform:translate(-50%, -50%);background-color: #FFF;padding:25px">
+        <h1 style="padding:50px">BC AWARE CYBER DEFENCE CHALLENGE</h1>
         <div ng-controller="scoreboardController" class="scores">
-            <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
+            <table class="table table-bordered table-hover" style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
                 <tr>
-                    <th style="width:25%;text-align:center;">Team</th>
-                    <th style="width:25%;text-align:center;">Score</th>
+                    <th style="width:20%;text-align:center;">Place</th>
+                    <th style="width:60%;text-align:center;">Team</th>
+                    <th style="width:20%;text-align:center;">Score</th>
                 </tr>
-                <tr ng-repeat="pair in scores | toArray | orderBy:'team'">
+                <tr ng-repeat="pair in scores | toArray | orderBy:'-score'">
+                    <td style="text-align:center;">{{$index + 1}}</td>
                     <td style="text-align:center;">{{pair.team}}</td>
                     <td style="text-align:center;">{{pair.score}}</td>
                 </tr>
             </table>
+        </div>
+        <h3 style="padding:50px">Brought to you by:</h3>
+        <div class="row">
+            <div class="col-md-4">
+                <img style="max-width:100%;max-height: 150px" class="img-fluid" src="https://cdn.worldvectorlogo.com/logos/global-knowledge-1.svg" />
+            </div>
+            <div class="col-md-4">
+                <img style="max-width:100%;max-height: 150px" class="img-fluid" src="http://wcisc.ca/wp-content/uploads/2013/11/CCDC-Logo-Clear_1.png" />
+            </div>
+            <div class="col-md-4">
+                <img style="max-width:100%;max-height: 150px" class="img-fluid" src="https://static1.squarespace.com/static/581233a0725e25f31677a22f/t/59cc5268f09ca43f2db99e25/1506562668674/17BCAWARE-avatar.jpg" />
+            </div>
         </div>
     </div>
 </body>
