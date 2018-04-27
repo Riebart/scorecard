@@ -78,6 +78,7 @@ def traced_lambda(name):
                 http=http,
                 metadata={"Event": metadata_event},
                 annotations=annotations)
+            root_chain.recursive_flush()
             return ret
 
         return __wrapper
@@ -106,9 +107,8 @@ def coin_toss(flips, heads, p_head=0.5):
     """
     # p^m (1-p)^(n-m) Binomial[n,m]
     binomial = binomial_list(flips, heads)
-    probabilities = [float(p_head) for _ in xrange(heads)] + [
-        float(1 - p_head) for _ in xrange(flips - heads)
-    ]
+    probabilities = [float(p_head) for _ in xrange(heads)
+                     ] + [float(1 - p_head) for _ in xrange(flips - heads)]
     return reduce(lambda a, b: a * b,
                   [a * b for a, b in zip(binomial, probabilities)])
 

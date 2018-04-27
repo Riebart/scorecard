@@ -41,6 +41,10 @@ class Chain(object):
                  trace_id=None,
                  mock=None,
                  use_env_trace_params=True):
+        # Keep track of all child chains made from this one directly, used for
+        # recursive flushing of all chains.
+        self.children = []
+
         # Trace IDs are public, so this ensures that trace IDs can't be guessed
         # by using this key as an HMAC with the name and the timestamp.
         self.trace_id_key = os.urandom(16)
@@ -168,12 +172,16 @@ class Chain(object):
         if parent_id is None:
             parent_id = self.last_segment_id
 
-        return Chain(
+        child = Chain(
             parent_id=parent_id,
             subsegment=subsegment,
             backlog=self.backlog,
             trace_id=self.trace_id,
             mock=self.mock)
+
+        self.children.append(child)
+
+        return child
 
     def log(self,
             start_time,
@@ -308,6 +316,14 @@ class Chain(object):
 
         return __decorator
 
+    def recursive_flush(self):
+        """
+        Flush this chain, and all child chains recursively. Useful for flushing all segments that were collected over a period, all the way to the bottom of the chain tree.
+        """
+        self.flush()
+        for chain in self.children:
+            chain.recursive_flush()
+
     def flush(self):
         """
         Flush the segment buffer. Can be called by a client before the backlog is
@@ -339,3 +355,22 @@ class Chain(object):
         self.segments = []
         self.flush_lock.release()
         return nsegments
+
+
+def lambda_handler(event, context):
+    import time
+    root = Chain()
+    rsid = root.log_start(name="Root")
+    time.sleep(0.1)
+    cr = root.fork_root()
+    cs = root.fork_subsegment()
+    crsid = cr.log_start(name="RootedChild")
+    time.sleep(0.1)
+    cssid = cs.log_start(name="SubsegmentChild")
+    time.sleep(0.1)
+    cs.log_end(cssid)
+    time.sleep(0.1)
+    cr.log_end(crsid)
+    time.sleep(0.1)
+    root.log_end(rsid)
+    root.recursive_flush()

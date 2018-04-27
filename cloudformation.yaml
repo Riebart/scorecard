@@ -335,6 +335,7 @@ Resources:
                 Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FlagsTable}
               - Action:
                   - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
                 Effect: Allow
                 Resource: '*'
               - Action:
@@ -369,6 +370,7 @@ Resources:
                 Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FlagsTable}
               - Action:
                   - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
                 Effect: Allow
                 Resource: '*'
               - Action:
