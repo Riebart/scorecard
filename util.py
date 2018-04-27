@@ -38,12 +38,19 @@ def traced_lambda(name):
             root_chain = XrayChain(mock=mock)
             segment_id = root_chain.log_start(name=name)
             task_chain = root_chain.fork_root()
+
+            # Actually invoke the function being wrapped
             ret = target(*(args + (task_chain, )))
+
             if "team" in args[0]:
                 http = {
                     "request": {
                         "url": "/score/" + str(event["team"]),
                         "method": "GET"
+                    },
+                    "response": {
+                        "status": 200,
+                        "content_length": -1
                     }
                 }
                 if "ClientError" in ret:
