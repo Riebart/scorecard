@@ -63,8 +63,6 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
     $scope.ScorePresent = function () {
         $scope.scores = Object.keys($scope.scoresBack).map(function (key) {
             return { "team": key, "score": $scope.scoresBack[key] };
-        }).sort(function (a, b) {
-            return b.team < a.team;
         });
         $timeout(function () {
             $scope.ScorePresent();
@@ -73,6 +71,7 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
 
     $scope.init();
     $scope.ScoresRefreshOnce();
+    $scope.ScoresRefresh();
 
     // 5 seconds should be plenty for the initial scores to arrive, so wait that long and then
     // present them.
