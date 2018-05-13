@@ -37,8 +37,8 @@ def word_parts():
             (len(adjectives), len(nouns)))
     adjectives = [a.title() for a in adjectives if 4 <= len(a) <= 6]
     nouns = [n.title() for n in nouns if 4 <= len(n) <= 6]
-    err_log("Trimmed to %d adjectives and %d nouns." %
-            (len(adjectives), len(nouns)))
+    err_log("Trimmed to %d adjectives and %d nouns." % (len(adjectives),
+                                                        len(nouns)))
 
     return (adjectives, nouns)
 
@@ -76,8 +76,8 @@ def main():
     adjectives, nouns = word_parts()
 
     err_log("Generaging %d teams." % pargs.team_count)
-    teams = [(randint(10**35, 10**36), " ".join(
-        (sample(adjectives, 1)[0], sample(nouns, 1)[0])))
+    teams = [(randint(10**35, 10**36), " ".join((sample(adjectives, 1)[0],
+                                                 sample(nouns, 1)[0])))
              for _ in xrange(pargs.team_count)]
     print json.dumps(teams)
 
@@ -104,12 +104,14 @@ def main():
     for flag in flags:
         ddb_client.put_item(
             TableName=flag_table_name,
-            Item={"flag": {
-                "S": flag[0]
-            },
-                  "weight": {
-                      "N": repr(flag[1])
-                  }})
+            Item={
+                "flag": {
+                    "S": flag[0]
+                },
+                "weight": {
+                    "N": repr(flag[1])
+                }
+            })
 
     print "Claiming flags for teams and confiming scores"
     for team in teams:
@@ -125,10 +127,13 @@ def main():
                 url=api_endpoint + "/flag",
                 json={"team": str(team[0]),
                       "flag": flag[0]},
-                headers={'Content-Type': 'application/json'})
+                headers={
+                    'Content-Type': 'application/json'
+                })
             assert resp.json() == {'valid_flag': True}
         resp = requests.get(url=api_endpoint + "/score/" + str(team[0]))
         print resp.json()
+        # Explicitly ignore the bitmask element, the score should be sufficient
         assert resp.json()["score"] == score
         print json.dumps({"team": str(team[0]), "score": score})
 

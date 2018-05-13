@@ -47,7 +47,7 @@ Parameters:
     MaxValue: 1
     MinValue: 0
     Type: Number
-    Default: 0.01
+    Default: 0
     ConstraintDescription: Value must be a probability, and thus in the range [0, 1]
 
 Conditions:

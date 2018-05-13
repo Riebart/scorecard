@@ -4,6 +4,7 @@ Given a team number, tally the score of that team.
 """
 
 import time
+import hashlib
 
 import boto3
 from S3KeyValueStore import Table as S3Table
@@ -122,7 +123,8 @@ def score_bitmask(scores):
     Given a list of tuple pairings from the score key name to the score value, canonically sort
     the list by the score key name, and convert the values to boolean (with TRUE <=> != 0)
     """
-    return [(pair[1] not in [0.0, None]) for pair in sorted(scores)]
+    return [(hashlib.sha256(pair[0]).hexdigest(), pair[1] not in [0.0, None])
+            for pair in sorted(scores)]
 
 
 @traced_lambda("ScorecardTally")
