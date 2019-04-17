@@ -37,7 +37,7 @@ def json_int_list(str_val):
         raise Exception("\"%s\" is not a list." % str_val)
     for i in l:
         try:
-            assert isinstance(i, int)
+            assert (isinstance(i, int) or isinstance(i, long))
         except:
             raise Exception("\"%s\" is not an integer." % str(i))
     return l
@@ -50,15 +50,18 @@ class ScoreUpdateWebsocket(WebSocket):
     def handleConnected(self):
         print("New client: %s" % str(self), file=sys.stderr)
         WEBSOCKET_CLIENTS.append(self)
-        self.sendMessage(
-            json.dumps({
-                "timestamp": time.time(),
-                "contentType": "score_update",
-                "content": {
-                    sha256(str(k)).hexdigest(): v
-                    for k, v in TEAM_SCORES.iteritems()
-                }
-            }))
+        try:
+            self.sendMessage(
+                json.dumps({
+                    "timestamp": time.time(),
+                    "contentType": "score_update",
+                    "content": {
+                        sha256(str(k)).hexdigest(): v
+                        for k, v in TEAM_SCORES.iteritems()
+                    }
+                }))
+        except Exception as e:
+            print([str(e), repr(e), e.__dict__], file=sys.stderr)
 
     def handleClose(self):
         print("Disconnected client: %s" % str(self), file=sys.stderr)
