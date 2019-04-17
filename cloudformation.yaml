@@ -315,6 +315,12 @@ Resources:
           - S3Bucket: !Ref CodeSourceBucket
             S3Key: !Ref CodeSourceTallyObject
 
+  TallyInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref TallyLambdaRole
+
   TallyLambdaRole:
     Type: AWS::IAM::Role
     Properties:
