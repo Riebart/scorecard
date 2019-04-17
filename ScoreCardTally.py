@@ -7,7 +7,10 @@ import time
 import hashlib
 
 import boto3
-from S3KeyValueStore import Table as S3Table
+try:
+    from S3KeyValueStore import Table as S3Table
+except:
+    print("Ignoring S3 backend.")
 from util import traced_lambda
 
 BACKEND_TYPE = None
@@ -213,8 +216,9 @@ def lambda_handler(event, context, chain=None):
             sim_time = time.time()
 
         # For each flag DDB row, try to score each flag for the team.
-        flag_score = score_chain.trace("ScoreFlag")(score_flag)(
-            team, flag, ddb_item, sim_time)
+        flag_score = score_chain.trace("ScoreFlag")(score_flag)(team, flag,
+                                                                ddb_item,
+                                                                sim_time)
         scores.append([flag["flag"], flag_score])
         if flag_score is not None:
             score += float(flag_score)

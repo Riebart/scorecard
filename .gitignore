@@ -3,6 +3,7 @@ constants.js
 htmlcov/*
 *pyc
 .vs
+.venv
 *sample*
 *7z
 *nb

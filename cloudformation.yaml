@@ -241,7 +241,7 @@ Resources:
       Description: Initial CloudFormation deployment stage
       RestApiId: !Ref API
       StageName: Main
-  
+
   FlagPostPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -323,7 +323,10 @@ Resources:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
+              Service:
+                - lambda.amazonaws.com
+                - ec2.amazonaws.com
+                - ecs-tasks.amazonaws.com
         Version: '2012-10-17'
       Policies:
         - PolicyName: TallyLambdaPolicy
