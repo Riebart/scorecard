@@ -1,8 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import uuid
 import argparse
-import StringIO
+import io
 import zipfile
 import boto3
 
@@ -11,7 +11,7 @@ def zip_files(filenames):
     """
     Map a collection of files into a zip file with the same name and paths.
     """
-    sso = StringIO.StringIO()
+    sso = io.BytesIO()
     with zipfile.ZipFile(sso, "w") as zfile:
         for fname in filenames:
             zfile.write(fname)
@@ -57,7 +57,8 @@ def main():
         "--score-cache-lifetime",
         required=False,
         default=None,
-        help="Duration (in seconds) for lambda functions to cache team scores.")
+        help="Duration (in seconds) for lambda functions to cache team scores."
+    )
     parser.add_argument(
         "--flag-cache-lifetime",
         required=False,
@@ -67,40 +68,47 @@ def main():
 
     if pargs.backend_type is not None:
         if pargs.backend_type not in ["DynamoDB"]:  #["S3", "DynamoDB"]:
-            print "Backend type must be one of: S3, DynamoDB"
+            print("Backend type must be one of: S3, DynamoDB")
             exit(1)
         elif pargs.backend_type == "S3":
             if pargs.backend_s3_bucket is None or pargs.backend_s3_prefix is None:
-                print "If backend type is S3, both bucket and prefix must be specified."
+                print(
+                    "If backend type is S3, both bucket and prefix must be specified."
+                )
                 exit(2)
 
-    print "Building code zip files for deployment..."
-    tally_code = (str(uuid.uuid1()), zip_files(
-        ["ScoreCardTally.py", "S3KeyValueStore.py", "XrayChain.py",
-         "util.py"]))
-    submit_code = (str(uuid.uuid1()), zip_files([
-        "ScoreCardSubmit.py", "S3KeyValueStore.py", "XrayChain.py", "util.py"
-    ]))
+    print("Building code zip files for deployment...")
+    tally_code = (str(uuid.uuid1()),
+                  zip_files([
+                      "ScoreCardTally.py", "S3KeyValueStore.py",
+                      "XrayChain.py", "util.py"
+                  ]))
+    submit_code = (str(uuid.uuid1()),
+                   zip_files([
+                       "ScoreCardSubmit.py", "S3KeyValueStore.py",
+                       "XrayChain.py", "util.py"
+                   ]))
 
-    print "Uploading code zip files to S3 bucke (%s)..." % pargs.code_bucket
+    print("Uploading code zip files to S3 bucke (%s)..." % pargs.code_bucket)
     s3_client = boto3.client("s3")
     for code in [tally_code, submit_code]:
-        print "    Uploading %s.zip" % code[0]
-        s3_client.put_object(
-            Bucket=pargs.code_bucket, Key="%s.zip" % code[0], Body=code[1])
+        print("    Uploading %s.zip" % code[0])
+        s3_client.put_object(Bucket=pargs.code_bucket,
+                             Key="%s.zip" % code[0],
+                             Body=code[1])
 
     cfn_client = boto3.client("cloudformation")
 
-    print "Determining stack operation..."
+    print("Determining stack operation...")
     try:
         stack_description = cfn_client.describe_stacks(
             StackName=pargs.stack_name)
-        print "    Stack Update selected"
+        print("    Stack Update selected")
     except:
-        print "    Stack create selected"
+        print("    Stack create selected")
         stack_description = None
 
-    print "Building stack parameters..."
+    print("Building stack parameters...")
     stack_params = []
 
     if stack_description is not None:
@@ -124,29 +132,29 @@ def main():
 
     if pargs.backend_type is None:
         if stack_description is None:
-            print "    Using default backend configuration"
+            print("    Using default backend configuration")
         else:
-            print "    Using previous backend configuration"
+            print("    Using previous backend configuration")
             stack_params.append({
                 "ParameterKey": "KeyValueBackend",
                 "UsePreviousValue": True
             })
     elif pargs.backend_type == "S3":
-        print "    Configuring S3 backend (%s, %s)" % (pargs.backend_s3_bucket,
-                                                       pargs.backend_s3_prefix)
+        print("    Configuring S3 backend (%s, %s)" %
+              (pargs.backend_s3_bucket, pargs.backend_s3_prefix))
         stack_params.append({
             "ParameterKey": "KeyValueBackend",
             "ParameterValue": "S3"
         })
     elif pargs.backend_type == "DynamoDB":
-        print "    Configuring DynamoDB backend"
+        print("    Configuring DynamoDB backend")
         stack_params.append({
             "ParameterKey": "KeyValueBackend",
             "ParameterValue": "DynamoDB"
         })
 
     if pargs.score_cache_lifetime is not None:
-        print "    Setting new score cache timeout"
+        print("    Setting new score cache timeout")
         stack_params.append({
             "ParameterKey": "ScoreCacheLifetime",
             "ParameterValue": str(pargs.score_cache_lifetime)
@@ -158,7 +166,7 @@ def main():
         })
 
     if pargs.flag_cache_lifetime is not None:
-        print "    Setting new flag cache timeout"
+        print("    Setting new flag cache timeout")
         stack_params.append({
             "ParameterKey": "FlagCacheLifetime",
             "ParameterValue": str(pargs.flag_cache_lifetime)
@@ -169,28 +177,26 @@ def main():
             "UsePreviousValue": True
         })
 
-    print "Reading cloudformation template..."
+    print("Reading cloudformation template...")
     with open("cloudformation.yaml") as fp:
         template_body = fp.read()
 
     if stack_description is None:
-        print "Creating stack..."
-        cfn_client.create_stack(
-            StackName=pargs.stack_name,
-            TemplateBody=template_body,
-            Parameters=stack_params,
-            Capabilities=['CAPABILITY_IAM'])
+        print("Creating stack...")
+        cfn_client.create_stack(StackName=pargs.stack_name,
+                                TemplateBody=template_body,
+                                Parameters=stack_params,
+                                Capabilities=['CAPABILITY_IAM'])
         waiter = cfn_client.get_waiter('stack_create_complete')
     else:
-        print "Updating stack..."
-        cfn_client.update_stack(
-            StackName=pargs.stack_name,
-            TemplateBody=template_body,
-            Parameters=stack_params,
-            Capabilities=['CAPABILITY_IAM'])
+        print("Updating stack...")
+        cfn_client.update_stack(StackName=pargs.stack_name,
+                                TemplateBody=template_body,
+                                Parameters=stack_params,
+                                Capabilities=['CAPABILITY_IAM'])
         waiter = cfn_client.get_waiter('stack_update_complete')
 
-    print "Waiting for stack operation to complete..."
+    print("Waiting for stack operation to complete...")
     waiter.wait(StackName=pargs.stack_name)
 
     api_resource = cfn_client.describe_stack_resources(
@@ -198,13 +204,13 @@ def main():
         LogicalResourceId='API')['StackResources'][0]['PhysicalResourceId']
 
     if stack_description is not None:
-        print "Creating new API Gateway deployment..."
+        print("Creating new API Gateway deployment...")
         apig_client = boto3.client('apigateway')
         apig_client.create_deployment(restApiId=api_resource, stageName='Main')
 
-    print "Stack operation complete."
-    print "API URL: https://%s.execute-api.%s.amazonaws.com/Main" % (
-        api_resource, boto3.Session().region_name)
+    print("Stack operation complete.")
+    print("API URL: https://%s.execute-api.%s.amazonaws.com/Main" %
+          (api_resource, boto3.Session().region_name))
 
 
 if __name__ == "__main__":
