@@ -12,6 +12,27 @@
     <script src="constants.js"></script>
     <!-- Angularjs app and controllers -->
     <script src="dashboard-app.js"></script>
+    <style>
+        th.rotate {
+            /* Something you can count on */
+            /* height: 140px; */
+            white-space: nowrap;
+        }
+
+        th.rotate>div {
+            transform:
+                /* Magic Numbers */
+                translate(0px, 0px)
+                /* 45 is really 360 - 45 */
+                rotate(315deg);
+            width: 30px;
+        }
+
+        th.rotate>div>span {
+            border-bottom: 1px solid #ccc;
+            padding: -5px 10px;
+        }
+    </style>
 </head>
 
 <body ng-app="dashboardApp" style="text-align:center">
@@ -23,7 +44,7 @@
     </header>
     <div id="wrapper" style="vertical-align:middle;position: absolute;top:50%;left:50%;transform:translate(-50%, -50%)">
         <div ng-controller="scoreboardController" class="scores">
-            <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
+            <!-- <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
                 <tr>
                     <th style="width:25%;text-align:center;">Team</th>
                     <th style="width:25%;text-align:center;">Score</th>
@@ -31,6 +52,27 @@
                 <tr ng-repeat="pair in scores">
                     <td style="text-align:center;">{{pair.team}}</td>
                     <td style="text-align:center;">{{pair.score}}</td>
+                </tr>
+            </table> -->
+            <table
+                style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;width:80%">
+                <tr>
+                    <th style="text-align:center;padding:5px;width:fit-content;white-space: nowrap">Team</th>
+                    <th style="text-align:center;padding:5px">Score</th>
+                    <!-- Ref: https://css-tricks.com/rotated-table-column-headers/ -->
+                    <th class="rotate" ng-repeat="flag in flagDashboardNames">
+                        <div><span>{{flag}}</span></div>
+                    </th>
+                </tr>
+                <tr ng-repeat="team in scores">
+                    <td style="text-align:center;width:fit-content;white-space: nowrap">{{team.name}}
+                    </td>
+                    <td style="text-align:center;">{{team.score}}</td>
+                    <td ng-repeat="flag in team.bitmask track by $index"
+                        ng-style="{'background-color':(flag ? '#8f8' : '#f88')}">
+                        <!-- <span ng-show="!flag" style="background-color:red"></span> -->
+                        <!-- <span ng-show="flag" style="background-color:green"></span> -->
+                    </td>
                 </tr>
             </table>
         </div>

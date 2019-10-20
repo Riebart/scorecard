@@ -1,5 +1,8 @@
 var myApp = angular.module('dashboardApp', ['ngResource']);
 
+var REFRESH_INTERVAL = 5000;
+var PRESENT_INTERVAL = 5000;
+
 myApp.filter("toArray", function () {
     return function (obj) {
         var result = [];
@@ -13,10 +16,17 @@ myApp.filter("toArray", function () {
 myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '$timeout', function ($scope, $rootScope, $resource, $timeout) {
 
     $scope.init = function () {
+        // Look in the constants.js file for the flag friendly names for the dashboard
+        // This will be a mapping from flag hash to friendly names.
+        // If no mapping is found for a given flag hash, we'll make something up later and update this
+        $scope.flagDashboardMapping = {};
+
         // The scores, on initialization, are an empty list.
         $scope.scores = {};
         $scope.scoresBack = {};
         $scope.team_names = {};
+        $scope.flagDashboardNames = [];
+
         $scope.ScoresResource = $resource(API_ENDPOINT + "/score/:team");
     };
 
@@ -38,7 +48,17 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
             $scope.ScoresResource.get({
                 team: team_id.toString()
             }, function (score) {
-                $scope.scoresBack[$scope.team_names[score.team]] = score.score;
+                $scope.scoresBack[score.team] = {
+                    id: score.team,
+                    name: $scope.team_names[score.team],
+                    score: score.score,
+                    bitmask: score.bitmask.map(function (flag) {
+                        return flag.claimed;
+                    })
+                };
+                $scope.flagDashboardNames = score.bitmask.map(function (flag) {
+                    return flag.nickname;
+                });
             });
         }
         return true;
@@ -50,23 +70,22 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
                 if ($scope.PopulateScores()) {
                     poll();
                 }
-            }, 30000);
+            }, REFRESH_INTERVAL);
         };
         poll();
     };
 
     $scope.ScoresRefreshOnce = function () {
         $scope.PopulateScores();
-
     };
 
     $scope.ScorePresent = function () {
         $scope.scores = Object.keys($scope.scoresBack).map(function (key) {
-            return { "team": key, "score": $scope.scoresBack[key] };
+            return { "team": key, "name": $scope.scoresBack[key].name, "score": $scope.scoresBack[key].score, "bitmask": $scope.scoresBack[key].bitmask };
         });
         $timeout(function () {
             $scope.ScorePresent();
-        }, 30000);
+        }, PRESENT_INTERVAL);
     };
 
     $scope.init();

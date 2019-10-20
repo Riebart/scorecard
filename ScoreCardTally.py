@@ -126,8 +126,12 @@ def score_bitmask(scores):
     Given a list of tuple pairings from the score key name to the score value, canonically sort
     the list by the score key name, and convert the values to boolean (with TRUE <=> != 0)
     """
-    return [(hashlib.sha256(pair[0]).hexdigest(), pair[1] not in [0.0, None])
-            for pair in sorted(scores)]
+    return [
+        dict(
+            zip(["hash", "claimed", "nickname"], (hashlib.sha256(
+                score[0]).hexdigest(), score[1] not in [0.0, None], score[2])))
+        for score in sorted(scores)
+    ]
 
 
 @traced_lambda("ScorecardTally")
@@ -219,7 +223,10 @@ def lambda_handler(event, context, chain=None):
         flag_score = score_chain.trace("ScoreFlag")(score_flag)(team, flag,
                                                                 ddb_item,
                                                                 sim_time)
-        scores.append([flag["flag"], flag_score])
+        scores.append([
+            flag["flag"], flag_score,
+            flag.get("nickname", "NONICK: %s" % flag["flag"])
+        ])
         if flag_score is not None:
             score += float(flag_score)
 
