@@ -1,8 +1,19 @@
 <!DOCTYPE html>
 <html lang="en-US">
+
 <head>
     <meta charset="UTF-8">
     <title>ScoreCard Submission Page</title>
+
+    <!-- favicon package from https://realfavicongenerator.net/ -->
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon/favicon-16x16.png">
+    <link rel="manifest" href="favicon/site.webmanifest">
+    <link rel="mask-icon" href="favicon/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
     <!--<link rel="stylesheet" href="stylesheet.css" type="text/css" charset="utf-8" />-->
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
@@ -12,6 +23,7 @@
     <!-- Angularjs app and controllers -->
     <script src="submit-app.js"></script>
 </head>
+
 <body ng-app="submissionApp" style="text-align:center">
     <header>
         <!-- <div id="square"></div> -->
@@ -25,21 +37,15 @@
                 <tr>
                     <td style="text-align:right;"><b>Team Number:&nbsp;</b></td>
                     <td>
-                        <input type="text"
-                            class="form-control"
-                            ng-keydown="inputKeyPressed($event)"
-                            ng-model="teamText"
-                            id="team-input"/>
+                        <input type="text" class="form-control" ng-keydown="inputKeyPressed($event)" ng-model="teamText"
+                            id="team-input" />
                     </td>
                 </tr>
                 <tr>
                     <td style="text-align:right;"><b>Flag:&nbsp;</b></td>
                     <td>
-                        <input type="text"
-                            class="form-control"
-                            ng-keydown="inputKeyPressed($event)"
-                            ng-model="flagText"
-                            id="flag-input"/>
+                        <input type="text" class="form-control" ng-keydown="inputKeyPressed($event)" ng-model="flagText"
+                            id="flag-input" />
                     </td>
                 </tr>
                 <tr>
@@ -47,11 +53,8 @@
                     <td>&nbsp;</td>
                 </tr>
             </table>
-            <button type="button"
-                            class="form-control"
-                            ng-click="submitFlag();"
-                            ng-disabled="submitting"
-                        id="submit">Submit</button>
+            <button type="button" class="form-control" ng-click="submitFlag();" ng-disabled="submitting"
+                id="submit">Submit</button>
             <div ng-show="submission_status == null">
                 <label style="float:center">&nbsp;</label>
             </div>
@@ -70,4 +73,5 @@
         </div>
     </div>
 </body>
+
 </html>
