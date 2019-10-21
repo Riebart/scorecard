@@ -1,0 +1,22 @@
+[
+    {
+        "team_id": "1",
+        "team_name": "Team01"
+    },
+    {
+        "team_id": "2",
+        "team_name": "Team02"
+    },
+    {
+        "team_id": "3",
+        "team_name": "Team03"
+    },
+    {
+        "team_id": "4",
+        "team_name": "Team04"
+    },
+    {
+        "team_id": "5",
+        "team_name": "Team05"
+    }
+]
