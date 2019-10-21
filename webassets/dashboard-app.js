@@ -16,23 +16,24 @@ myApp.filter("toArray", function () {
 myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '$timeout', function ($scope, $rootScope, $resource, $timeout) {
 
     $scope.init = function () {
-        // Look in the constants.js file for the flag friendly names for the dashboard
-        // This will be a mapping from flag hash to friendly names.
-        // If no mapping is found for a given flag hash, we'll make something up later and update this
-        $scope.flagDashboardMapping = {};
-
         // The scores, on initialization, are an empty list.
         $scope.scores = {};
         $scope.scoresBack = {};
         $scope.team_names = {};
         $scope.flagDashboardNames = [];
 
+        $scope.teams = [];
+        fetch("teams.json")
+            .then(response => response.json())
+            .then(function (rjson) { $scope.teams = rjson; });
+
+
         $scope.ScoresResource = $resource(API_ENDPOINT + "/score/:team");
     };
 
     $scope.PopulateScores = function () {
-        for (i in TEAMS) {
-            t = TEAMS[i];
+        for (i in $scope.teams) {
+            t = $scope.teams[i];
             team_id = null;
             if (typeof (t) == "object") {
                 team_id = t.team_id;
@@ -66,11 +67,17 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
 
     $scope.ScoresRefresh = function () {
         var poll = function () {
+            var call_again_in = REFRESH_INTERVAL;
+
+            if ($scope.teams.length == 0 || $scope.scores.length == 0 || $scope.scores.length < $scope.teams.length) {
+                call_again_in = 250;
+            }
+
             $timeout(function () {
                 if ($scope.PopulateScores()) {
                     poll();
                 }
-            }, REFRESH_INTERVAL);
+            }, call_again_in);
         };
         poll();
     };
@@ -80,12 +87,23 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
     };
 
     $scope.ScorePresent = function () {
+        fetch("teams.json")
+            .then(response => response.json())
+            .then(function (rjson) { $scope.teams = rjson; });
+
         $scope.scores = Object.keys($scope.scoresBack).map(function (key) {
             return { "team": key, "name": $scope.scoresBack[key].name, "score": $scope.scoresBack[key].score, "bitmask": $scope.scoresBack[key].bitmask };
         });
+
+        var call_again_in = PRESENT_INTERVAL;
+
+        if ($scope.teams.length == 0 || $scope.scores.length == 0 || $scope.scores.length < $scope.teams.length) {
+            call_again_in = 250;
+        }
+
         $timeout(function () {
             $scope.ScorePresent();
-        }, PRESENT_INTERVAL);
+        }, call_again_in);
     };
 
     $scope.init();
@@ -96,5 +114,5 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
     // present them.
     $timeout(function () {
         $scope.ScorePresent();
-    }, 5000);
+    }, 250);
 }]);
