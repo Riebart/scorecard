@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CTF Registration</title>
+
+    <!-- favicon package from https://realfavicongenerator.net/ -->
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon/favicon-16x16.png">
+    <link rel="manifest" href="favicon/site.webmanifest">
+    <link rel="mask-icon" href="favicon/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+    <!--<link rel="stylesheet" href="stylesheet.css" type="text/css" charset="utf-8" />-->
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-resource.js"></script>
+    <!-- This is the file that contains the API gateway endpoint and default channel name -->
+    <script src="constants.js"></script>
+    <!-- Angularjs app and controllers -->
+    <script src="register-app.js"></script>
+</head>
+
+<body ng-app="submissionApp" style="text-align:center">
+    <header>
+        <!-- <div id="square"></div> -->
+        <!-- <img id="logo" src="assets/images/logo.svg" style="padding-top:10em;padding-left:3em;padding-right:1em;"/> -->
+        <!-- <div id="main-header"><img src="assets/images/title.svg"></div> -->
+        <!-- <img id="org-logo" src="assets/images/org-logo.svg"/> -->
+    </header>
+    <div id="wrapper" style="vertical-align:middle;position: absolute;top:50%;left:50%;transform:translate(-50%, -50%)">
+        <div ng-controller="submissionController" class="scores">
+            <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
+                <tr>
+                    <td style="text-align:right;"><b>Email address:&nbsp;</b></td>
+                    <td>
+                        <input type="text" class="form-control" ng-keydown="inputKeyPressed($event)"
+                            ng-model="emailText" id="team-input" />
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align:right;"><b>Username:&nbsp;</b></td>
+                    <td>
+                        <input type="text" class="form-control" ng-keydown="inputKeyPressed($event)"
+                            ng-model="usernameText" id="flag-input" />
+                    </td>
+                </tr>
+                <tr>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                </tr>
+            </table>
+            <button type="button" class="form-control" ng-click="submitFlag();" ng-disabled="submitting"
+                id="submit">Submit</button>
+            <div ng-show="submission_status == null">
+                <label style="float:center">&nbsp;</label>
+            </div>
+            <div ng-show="submission_status == 'invalid'">
+                <label style="float:center;color:darkorange">Invalid registration information</label>
+            </div>
+            <div ng-show="submission_status == 'success'">
+                <label style="float:center;color:darkseagreen">Registration submission successful! Expect an email
+                    soon.</label>
+            </div>
+            <div ng-show="submission_status == 'failure'">
+                <label style="float:center;color:darkred">Both email and username fields must be filled in.</label>
+            </div>
+            <div ng-show="submission_status == 'failure_parse'">
+                <label style="float:center;color:darkred">Email must be an email, and username must match
+                    r"^[a-zA-z0-9]{4,64}$".</label>
+            </div>
+            <div ng-show="submission_status == 'failed_duplicate'">
+                <label style="float:center;color:darkorange">Username already exists.</label>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

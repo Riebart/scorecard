@@ -3,6 +3,8 @@
 Ingest a flag and update the DynamoDB table accordingly.
 """
 
+from __future__ import print_function
+
 import os
 import json
 import time
@@ -104,8 +106,9 @@ def lambda_handler(event, context, chain=None):
     if os.environ.get("SCORECARD_LOG_EVENTS", None) is not None:
         logged_event = dict()
         logged_event.update(event)
-        logged_event["timestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        print json.dumps(logged_event)
+        logged_event["timestamp"] = datetime.now().strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ")
+        print(json.dumps(logged_event))
 
     try:
         FLAGS_DATA['check_interval'] = float(event['FlagCacheLifetime'])
@@ -164,10 +167,8 @@ def lambda_handler(event, context, chain=None):
 
             # Check if the auth_key provided matches the auth_key for the flag
             # for this team.
-            if str(
-                    event['team']
-            ) not in flag_item['auth_key'] or event['auth_key'] != flag_item['auth_key'][str(
-                    event['team'])]:
+            if str(event['team']) not in flag_item['auth_key'] or event[
+                    'auth_key'] != flag_item['auth_key'][str(event['team'])]:
                 return {'valid_flag': False}
 
         try:

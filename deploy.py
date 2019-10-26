@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 
+import json
 import uuid
 import argparse
 import io
 import zipfile
 import boto3
+
+
+def jsondict(s):
+    d = json.loads(s)
+    assert isinstance(d, dict)
+    return d
 
 
 def zip_files(filenames):
@@ -32,6 +39,12 @@ def main():
         required=True,
         help="""The name of the stack to bring up. If the stack exists, it is
         updated instead.""")
+    parser.add_argument(
+        "--registration-email-source",
+        required=True,
+        help=
+        """The email address to use as the source of an email to new registrants."""
+    )
     parser.add_argument(
         "--backend-type",
         required=False,
@@ -64,6 +77,14 @@ def main():
         required=False,
         default=None,
         help="Duration (in seconds) for lambda functions to cache game flags.")
+    parser.add_argument(
+        "--cfn-tags",
+        required=False,
+        type=jsondict,
+        default=dict(),
+        help=
+        """A list of tags as a dict to use as tag keys and values for the CloudFormation stack."""
+    )
     pargs = parser.parse_args()
 
     if pargs.backend_type is not None:
@@ -88,10 +109,12 @@ def main():
                        "ScoreCardSubmit.py", "S3KeyValueStore.py",
                        "XrayChain.py", "util.py"
                    ]))
+    register_code = (str(uuid.uuid1()),
+                     zip_files(["Register.py", "XrayChain.py", "util.py"]))
 
-    print("Uploading code zip files to S3 bucke (%s)..." % pargs.code_bucket)
+    print("Uploading code zip files to S3 bucket (%s)..." % pargs.code_bucket)
     s3_client = boto3.client("s3")
-    for code in [tally_code, submit_code]:
+    for code in [tally_code, submit_code, register_code]:
         print("    Uploading %s.zip" % code[0])
         s3_client.put_object(Bucket=pargs.code_bucket,
                              Key="%s.zip" % code[0],
@@ -111,6 +134,11 @@ def main():
     print("Building stack parameters...")
     stack_params = []
 
+    stack_params.append({
+        "ParameterKey": "SESEmailSource",
+        "ParameterValue": pargs.registration_email_source
+    })
+
     if stack_description is not None:
         stack_params.append({
             "ParameterKey": "XraySampleRate",
@@ -128,6 +156,10 @@ def main():
     stack_params.append({
         "ParameterKey": "CodeSourceSubmitObject",
         "ParameterValue": submit_code[0] + ".zip"
+    })
+    stack_params.append({
+        "ParameterKey": "CodeSourceRegisterObject",
+        "ParameterValue": register_code[0] + ".zip"
     })
 
     if pargs.backend_type is None:
@@ -186,6 +218,10 @@ def main():
         cfn_client.create_stack(StackName=pargs.stack_name,
                                 TemplateBody=template_body,
                                 Parameters=stack_params,
+                                Tags=[{
+                                    "Key": key,
+                                    "Value": value
+                                } for key, value in pargs.cfn_tags.items()],
                                 Capabilities=['CAPABILITY_IAM'])
         waiter = cfn_client.get_waiter('stack_create_complete')
     else:
@@ -193,6 +229,10 @@ def main():
         cfn_client.update_stack(StackName=pargs.stack_name,
                                 TemplateBody=template_body,
                                 Parameters=stack_params,
+                                Tags=[{
+                                    "Key": key,
+                                    "Value": value
+                                } for key, value in pargs.cfn_tags.items()],
                                 Capabilities=['CAPABILITY_IAM'])
         waiter = cfn_client.get_waiter('stack_update_complete')
 

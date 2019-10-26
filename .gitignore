@@ -1,4 +1,6 @@
 constants.js
+teams.json
+welcome_email.html
 .vscode/*
 htmlcov/*
 *pyc

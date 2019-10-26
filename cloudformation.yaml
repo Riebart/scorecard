@@ -20,6 +20,13 @@ Parameters:
     Default: ''
     # Prevent people from including a starting slash.
     AllowedPattern: '(^[^/].*$|^$)'
+  CodeSourceRegisterObject:
+    Description: Object in which to find the zipfile for the code for the register
+      functions.
+    Type: String
+    Default: ''
+    # Prevent people from including a starting slash.
+    AllowedPattern: '(^[^/].*$|^$)'
   ScoreCacheLifetime:
     Description: Duration to keep scores for a single team cached to control for
       load on key-values store backend.
@@ -49,6 +56,17 @@ Parameters:
     Type: Number
     Default: 0
     ConstraintDescription: Value must be a probability, and thus in the range [0, 1]
+  SESRegion:
+    Description: Region to invoke SES out of for sending emails to registrants
+    Type: String
+    Default: us-east-1
+    AllowedValues:
+    - us-east-1
+    - us-west-2
+    - eu-west-1
+  SESEmailSource:
+    Description: Email address (must be validated within SES) to send emails from
+    Type: String
 
 Conditions:
   TallyCodePlaceholder:
@@ -59,8 +77,23 @@ Conditions:
     !Or
     - !Equals [ !Ref CodeSourceBucket, "" ]
     - !Equals [ !Ref CodeSourceSubmitObject, "" ]
+  RegisterCodePlaceholder:
+    !Or
+    - !Equals [ !Ref CodeSourceBucket, "" ]
+    - !Equals [ !Ref CodeSourceSubmitObject, "" ]
 
 Resources:
+  RegistrantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - {AttributeName: email, AttributeType: S}
+      KeySchema:
+      - {AttributeName: email, KeyType: HASH}
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+
   FlagsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -69,8 +102,8 @@ Resources:
       KeySchema:
       - {AttributeName: flag, KeyType: HASH}
       ProvisionedThroughput:
-        ReadCapacityUnits: 2
-        WriteCapacityUnits: 2
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
 
   ScoresTable:
     Type: AWS::DynamoDB::Table
@@ -229,6 +262,107 @@ Resources:
           method.response.header.Access-Control-Allow-Methods: true
           method.response.header.Access-Control-Allow-Origin: true
 
+  RegisterResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      PathPart: register
+      ParentId: !GetAtt API.RootResourceId
+      RestApiId: !Ref API
+  RegisterPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      ResourceId: !Ref RegisterResource
+      RestApiId: !Ref API
+      Integration:
+        Type: AWS
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${RegisterFunction}/invocations
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json:
+            !Sub |
+              {
+                "Method": "POST",
+                "ScoresTable": "${ScoresTable}",
+                "FlagsTable": "${FlagsTable}",
+                "RegistrantsTable": "${RegistrantsTable}",
+                "KeyValueBackend": "${KeyValueBackend}",
+                "ScoreCacheLifetime": "${ScoreCacheLifetime}",
+                "FlagCacheLifetime": "${FlagCacheLifetime}",
+                "email": "$input.path('$.email')",
+                "username": "$input.path('$.username')"
+              }
+  RegisterGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      ResourceId: !Ref RegisterResource
+      RestApiId: !Ref API
+      Integration:
+        Type: AWS
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${RegisterFunction}/invocations
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json:
+            !Sub |
+              {
+                "Method": "GET",
+                "ScoresTable": "${ScoresTable}",
+                "FlagsTable": "${FlagsTable}",
+                "RegistrantsTable": "${RegistrantsTable}",
+                "KeyValueBackend": "${KeyValueBackend}",
+                "ScoreCacheLifetime": "${ScoreCacheLifetime}",
+                "FlagCacheLifetime": "${FlagCacheLifetime}"
+              }
+  RegisterOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      ResourceId: !Ref RegisterResource
+      RestApiId: !Ref API
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationHttpMethod: OPTIONS
+        IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        Type: MOCK
+      MethodResponses:
+      - StatusCode: 200
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
+
   APIDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
@@ -237,6 +371,8 @@ Resources:
       - ScoreResource
       - TeamPathPart
       - ScoreGetMethod
+      - RegisterPostMethod
+      - RegisterResource
     Properties:
       Description: Initial CloudFormation deployment stage
       RestApiId: !Ref API
@@ -261,6 +397,53 @@ Resources:
       Action: lambda:InvokeFunction
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${API}/*/GET/score/*
       Principal: apigateway.amazonaws.com
+
+  RegisterPostPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - RegisterPostMethod
+    Properties:
+      FunctionName: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${RegisterFunction}
+      Action: lambda:InvokeFunction
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${API}/*/POST/register
+      Principal: apigateway.amazonaws.com
+
+  RegisterGetPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - RegisterGetMethod
+    Properties:
+      FunctionName: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${RegisterFunction}
+      Action: lambda:InvokeFunction
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${API}/*/GET/register
+      Principal: apigateway.amazonaws.com
+
+  RegisterFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - RegisterLambdaRole
+    Properties:
+      Description: Ingest an email and username, and register the user.
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/${RegisterLambdaRole}
+      TracingConfig:
+        Mode: Active
+      MemorySize: "128"
+      Timeout: "5"
+      Environment:
+        Variables:
+          XraySampleRate: !Ref XraySampleRate
+          SCORECARD_LOG_EVENTS: "TRUE"
+          SES_REGION: !Ref SESRegion
+      Runtime: python3.6
+      Handler: Register.lambda_handler
+      Code:
+        !If
+          - RegisterCodePlaceholder
+          - ZipFile: |
+              def handler(event, context):
+                  return True
+          - S3Bucket: !Ref CodeSourceBucket
+            S3Key: !Ref CodeSourceRegisterObject
 
   SubmitFunction:
     Type: AWS::Lambda::Function
@@ -381,6 +564,44 @@ Resources:
                   - dynamodb:Scan
                 Effect: Allow
                 Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FlagsTable}
+              - Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: "*"
+            Version: '2012-10-17'
+
+  RegisterLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyName: RegisterLambdaPolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Scan
+                Effect: Allow
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistrantsTable}
+              - Action:
+                - ses:sendEmail
+                Effect: Allow
+                Resource: '*'
               - Action:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords

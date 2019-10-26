@@ -3,6 +3,8 @@
 Given a team number, tally the score of that team.
 """
 
+from __future__ import print_function
+
 import time
 import hashlib
 
