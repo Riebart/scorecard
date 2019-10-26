@@ -24,14 +24,11 @@
     <script src="dashboard-app.js"></script>
     <style>
         th.rotate {
-            /* Something you can count on */
-            /* height: 140px; */
             white-space: nowrap;
         }
 
         th.rotate>div {
             transform:
-                /* Magic Numbers */
                 translate(0px, 0px)
                 /* 45 is really 360 - 45 */
                 rotate(315deg);
@@ -47,23 +44,10 @@
 
 <body ng-app="dashboardApp" style="text-align:center">
     <header>
-        <!--<div id="square"></div>-->
-        <!--<img id="logo" src="assets/images/logo.svg" style="padding-left:3em; padding-right:1em;"/>-->
-        <!--<div id="main-header"><img src="assets/images/title.svg"></div>-->
-        <!--<img id="org-logo" src="assets/images/org-logo.svg"/>-->
+        <img id="org-logo" src="favicon/favicon.png" />
     </header>
     <div id="wrapper" style="vertical-align:middle;position: absolute;top:50%;left:50%;transform:translate(-50%, -50%)">
         <div ng-controller="scoreboardController" class="scores">
-            <!-- <table style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;">
-                <tr>
-                    <th style="width:25%;text-align:center;">Team</th>
-                    <th style="width:25%;text-align:center;">Score</th>
-                </tr>
-                <tr ng-repeat="pair in scores">
-                    <td style="text-align:center;">{{pair.team}}</td>
-                    <td style="text-align:center;">{{pair.score}}</td>
-                </tr>
-            </table> -->
             <table
                 style="position:relative;margin-top:auto;margin-bottom:auto;margin-left:auto;margin-right:auto;width:80%">
                 <tr>
@@ -80,12 +64,22 @@
                     <td style="text-align:center;">{{team.score}}</td>
                     <td ng-repeat="flag in team.bitmask track by $index"
                         ng-style="{'background-color':(flag ? '#8f8' : '#f88')}">
-                        <!-- <span ng-show="!flag" style="background-color:red"></span> -->
-                        <!-- <span ng-show="flag" style="background-color:green"></span> -->
                     </td>
                 </tr>
             </table>
         </div>
+        <!-- <h3 style="padding:50px">Brought to you by:</h3>
+        <div class="row">
+            <div class="col-md-4">
+                <img style="max-width:100%;max-height: 150px" class="img-fluid" src="logo1.png" />
+            </div>
+            <div class="col-md-4">
+                <img style="max-width:100%;max-height: 150px" class="img-fluid" src="logo2.png" />
+            </div>
+            <div class="col-md-4">
+                <img style="max-width:100%;max-height: 150px" class="img-fluid" src="logo3.png" />
+            </div>
+        </div> -->
     </div>
 </body>
 
