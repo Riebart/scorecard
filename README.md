@@ -9,18 +9,12 @@ Modify the `constnts.js.example` to contain your team IDs (integers) and API Gat
 To deploy, have `boto3` installed (`pip install boto3`) and AWS API credentials configured, and use the `deploy.py` script to deploy a new stack.
 
 ```bash
-python deploy.py --stack-name ScoreCard --code-bucket cf-templates-2m24puvkjhv-us-east-1
+time python3 deploy.py --stack-name CTF-Scorecard-Dev --code-bucket cf-templates-2m24puvkjhv-us-east-1 --registration-email-source ctf@example.com --cfn-tags '{"Project": "BigKahunaCTF"}'
 ```
 
 This will deploy a default configuration using DynamoDB for both the flag configuration and score-keeping, with minimal capacity (1RCU and 1WCU) provisioned for each table.
 
-You can deploy an S3-based key-value backend for score keeping which provides better scaling than DynamoDB up to a few hundres TPS with truly on-demand cost.
-
-```bash
-python deploy.py --stack-name ScoreCard --code-bucket cf-templates-2m24puvkjhv-us-east-1 --backend-type S3 --backend-s3-bucket my-key-value-bucket --backend-s3-prefix CTF-Mar2017-ScoreCard
-```
-
-### Unit Testing
+<!-- ### Unit Testing
 
 A collection local unit tests that use moto and are run under coverage with branch coverage tracking are included and can be run with:
 
@@ -48,7 +42,7 @@ The stack will be temporarily modified to eliminate caching for testing purposes
 
 See the **Xray** section for details on the `MOCK_XRAY=TRUE` environment variable.
 
-**Note**: Only items created in DynamoDB are cleaned up. When an S3 backend for score data is chosen then the associated objects that are created by the API backend in S3 are *not* cleaned up and will reamin.
+**Note**: Only items created in DynamoDB are cleaned up. When an S3 backend for score data is chosen then the associated objects that are created by the API backend in S3 are *not* cleaned up and will reamin. -->
 
 ### Sample Data
 
@@ -62,7 +56,7 @@ This leaves the stack with data in it, unlike the integration testing script whi
 
 This will also output a new constants.js file named as `constants.js.sample_{StackName}`.
 
-### Simulating Game Day
+### Simulating Game Day Resource Requirements
 
 There is an included script that is able to run simple simulations and estimate cache hit/miss ratios, as well as provide estimates on the amount of required DynamoDB capacity (RCUs) that will need to be provisioned on the ScoresTable DynamoDB resource. It will also emit some estimates of costs for other AWS resources that will be used during the event.
 
@@ -82,13 +76,15 @@ $ python simulate_costs.py --num-teams 17 --num-flags 28 --num-clients 84 --scor
 
 ## QuickStart: Frontend
 
-Once the backend has been deployed, copy the `constants.js.example` file to `constants.js`, and edit the `API_ENDPOINT` to match that output at the end of the `deploy.py` output. Edit the `TEAMS` list to include the list of team IDs (and optionally, team names for client-side display). Host the following files together on a webserver (or S3) and distribute the link to the dashboard and submission HTML pages:
+Once the backend has been deployed, copy the `constants.js.example` file to `constants.js`, and edit the `API_ENDPOINT` to match that output at the end of the `deploy.py` output. Set the `TEAMS_JSON_SOURCE` to either the name of a local resource (like a `teams.json`) or a URL to an API endpoint that returns something of the format matching a `teams.json`. Host the following files together on a webserver (or S3) and distribute the link to the registration, dashboard, and submission HTML pages:
 
 - constants.js
 - dashboard-app.js
 - submit-app.js
+- register-app.js
 - dashboard.html
 - submit.html
+- register.html
 
 ## Requirements and Specifications
 
@@ -141,12 +137,6 @@ The `Flags` table has a more complicated structure that stores each flag, it's a
 - `auth_key` (Map)
   - A mapping of stringifications of the team IDs to arbitrary strings that represent the key that must be supplied for a team to successfully claim this flag.
 
-<!--### Amazon S3 (DEPRECATED)
-
-There is an alternate score-keeping backend that uses S3 as a large key-value storage platform. This backend can be chosen through the Cloudformation template parameters (exposed nicely by the `--backend-type` option to `deploy.py`).
-
-This backend is recommended for most deployments, howver it is more opaque and offers a less intuitive interface for visibility into the scores of teams. This backend will perform better and will not incur the costs associated with unused provisioned capacity, however GET operations will be charged at standard S3 rates (as of this: 0.004USD/10000 requests).-->
-
 ### AWS Lambda functions
 
 The two AWS Lambda functions called by the API implement the logic for interacting with the DynamoDB table, as well as caching behaviour to enabled scaling to large client-numbers without increasing DynamoDB capacity.
@@ -166,31 +156,31 @@ All API resources and methods permit a request origin of `*` as this exposes an 
 - POST @ `/flag`
   - JSON body input
 
-  | Key | Type | Optional | Description |
-  |---|---|---|---|
-  | `team` | Integer | No | The team ID for the team claiming the flag. |
-  | `flag` | String | No | The flag being claimed. |
-  | `auth_key` | String | Yes | The authorization key that is to be matched against the team's value in the `auth_key` property of the flag. If this is unspecified and the flag requires an auth key, then the flag is invalid. If this is specified and does not match the required value, then the flag is invalid. |
+  | Key        | Type    | Optional | Description                                                                                                                                                                                                                                                                            |
+  | ---------- | ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `team`     | Integer | No       | The team ID for the team claiming the flag.                                                                                                                                                                                                                                            |
+  | `flag`     | String  | No       | The flag being claimed.                                                                                                                                                                                                                                                                |
+  | `auth_key` | String  | Yes      | The authorization key that is to be matched against the team's value in the `auth_key` property of the flag. If this is unspecified and the flag requires an auth key, then the flag is invalid. If this is specified and does not match the required value, then the flag is invalid. |
 
   - JSON body return value
 
-  | Key | Type | Optional | Description |
-  |---|---|---|---|
-  | `valid_flag` | Boolean | No | Whether or not the flag claim was successful. If this is `true` then the flag was successfulyl claimed. |
-  | `client_error` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
+  | Key            | Type    | Optional | Description                                                                                                                                                                                                                        |
+  | -------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `valid_flag`   | Boolean | No       | Whether or not the flag claim was successful. If this is `true` then the flag was successfulyl claimed.                                                                                                                            |
+  | `client_error` | List    | Yes      | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
 
 - GET @ `/score/{Team}`
   - Accepts a URL parameter, such as GET@`/score/10`, and returns the current score of the team queried.
   - JSON body return value
 
-  | Key | Type | Optional | Description |
-  |---|---|---|---|
-  | `team` | Integer | No | The team specified in the query. |
-  | `score` | Number | No | The score of the team in the specified query. |
-  | `bitmask` | Array of `bool` | No | An array of boolean values that indicates which flags (in an arbitrary but consistent order) the queried team has claimed. |
-  | `client_error` | List | Yes | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
+  | Key            | Type            | Optional | Description                                                                                                                                                                                                                        |
+  | -------------- | --------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `team`         | Integer         | No       | The team specified in the query.                                                                                                                                                                                                   |
+  | `score`        | Number          | No       | The score of the team in the specified query.                                                                                                                                                                                      |
+  | `bitmask`      | Array of `bool` | No       | An array of boolean values that indicates which flags (in an arbitrary but consistent order) the queried team has claimed.                                                                                                         |
+  | `client_error` | List            | Yes      | If this key exists, it contains a list of strings that describe errors encountered in the provided input. These errors are format/client errors and do not leak information about validitiy or authorization when claiming a flag. |
 
-### XRay
+<!-- ### XRay
 
 AWS Xray tracing is included to provide insights into timing and performance of various portions of the code. When running under moto, there are issues with the use of the real Xray service. Since moto does not mock Xray endpoints, the chosen solution is to use an environment variable, `MOCK_XRAY`, that, if it exists with any value, disables submission to the Xray API. All other XrayChain.Chain member functions will behave as normal.
 
@@ -215,7 +205,7 @@ Individual traces can be inspected for waterfall and grouped timeline informatio
 
 Traces can be sorted based on latency and other properties to identify and drill down into outliers.
 
-![Sorted traces showing outliers](/images/xray_trace-sorting.png?raw=true)
+![Sorted traces showing outliers](/images/xray_trace-sorting.png?raw=true) -->
 
 ## Dockerfile and Unit Tests
 
