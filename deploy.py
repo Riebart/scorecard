@@ -46,6 +46,13 @@ def main():
         """The email address to use as the source of an email to new registrants."""
     )
     parser.add_argument(
+        "--hmac-secret",
+        required=False,
+        default=None,
+        help=
+        """HMAC secret used during registration flow. Required if registration-email-source is set."""
+    )
+    parser.add_argument(
         "--backend-type",
         required=False,
         default="DynamoDB",
@@ -86,6 +93,10 @@ def main():
         """A list of tags as a dict to use as tag keys and values for the CloudFormation stack."""
     )
     pargs = parser.parse_args()
+
+    if pargs.registration_email_source is not None and pargs.hmac_secret is None:
+        print("If using email registration, the HMAC secret must be provided.")
+        exit(1)
 
     if pargs.backend_type is not None:
         if pargs.backend_type not in ["DynamoDB"]:  #["S3", "DynamoDB"]:
@@ -134,10 +145,17 @@ def main():
     print("Building stack parameters...")
     stack_params = []
 
-    stack_params.append({
-        "ParameterKey": "SESEmailSource",
-        "ParameterValue": pargs.registration_email_source
-    })
+    if pargs.registration_email_source is not None:
+        stack_params.append({
+            "ParameterKey": "SESEmailSource",
+            "ParameterValue": pargs.registration_email_source
+        })
+
+    if pargs.hmac_secret is not None:
+        stack_params.append({
+            "ParameterKey": "HMACSecret",
+            "ParameterValue": pargs.hmac_secret
+        })
 
     if stack_description is not None:
         stack_params.append({

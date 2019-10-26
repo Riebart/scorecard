@@ -1,15 +1,48 @@
 #!/usr/bin/env python3
 
-import os
+import base64
+import hashlib
+import hmac
 import json
+import os
 import re
 import time
+import uuid
 from random import randint
 
 import boto3
 
 ddb = boto3.client("dynamodb")
 ses = boto3.client("ses", region_name=os.environ["SES_REGION"])
+
+HMAC_SECRET = os.environ["HMAC_SECRET"].encode("utf-8")
+API_URL = os.environ["API_URL"]
+
+
+def sign_payload(data):
+    sig = hmac.new(HMAC_SECRET, data.encode("utf-8"),
+                   hashlib.sha256).hexdigest()
+    return base64.b32encode(
+        json.dumps({
+            "data": data,
+            "sig": sig
+        }).encode("utf-8")).decode("utf-8")
+
+
+def validate_payload(payload_b32):
+    try:
+        payload = json.loads(
+            base64.b32decode(payload_b32.encode("utf-8")).decode("utf-8"))
+        data = payload["data"]
+        sig = payload["sig"]
+        sig2 = hmac.new(HMAC_SECRET, data.encode("utf-8"),
+                        hashlib.sha256).hexdigest()
+        if hmac.compare_digest(sig, sig2):
+            return data
+        else:
+            return None
+    except:
+        return None
 
 
 def post(event, contest):
@@ -45,8 +78,88 @@ def post(event, contest):
                         Key={"email": {
                             "S": email
                         }})
-    if "Item" in item:
+
+    # If the DDB item doesn't exist, or if it does and it hasn't yet been assigned a team ID
+    # then there is no duplicate problem.
+    if "Item" in item and "teamId" in item["Item"]:
         return {"result": "failed_duplicate"}
+
+    confirmation_payload = {
+        "email": email,
+        "username": username,
+        "teamId": team_id,
+        "registrationTime": time.time()
+    }
+
+    confirmation_token = sign_payload(json.dumps(confirmation_payload))
+
+    ses.send_email(Destination={"ToAddresses": [email]},
+                   Source="The Big Kahuna CTF <ctf@example.com>",
+                   Message={
+                       "Subject": {
+                           "Data": "The Big Kahuna CTF - Confirm your email"
+                       },
+                       "Body": {
+                           "Html": {
+                               "Charset":
+                               "utf-8",
+                               "Data":
+                               """
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>CTF Registration</title>
+
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+
+        <style>
+.task-list-item { list-style-type: none; } .task-list-item-checkbox { margin-left: -20px; vertical-align: middle; }
+</style>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+
+
+    </head>
+    <body class="vscode-light">
+        <h1 id="ctf-registration">CTF Registration - Confirm your email</h1>
+<p>You've taken the first step towards registering in the CTF. We just need you to confirm your email, and we'll be on our way.</p>
+<p>Click the  <a href="%s">here</a> to confirm your registration.</p>
+<p>See you soon!</p>
+<p>The Big Kahuna CTF Team</p>
+    </body>
+    </html>
+                               """ %
+                               (API_URL + "/register?confirmation_token=" +
+                                confirmation_token)
+                           }
+                       }
+                   })
+    return {"result": "success"}
+
+
+def get_confirm(event, context):
+    """
+    Step 2 of registration where they are confirming an email address.
+    """
+    confirmation_token = event["confirmation_token"]
+    registration_payload = validate_payload(confirmation_token)
+
+    if registration_payload is None:
+        return "Unable to validate token."
+    else:
+        registration_payload = json.loads(registration_payload)
+
+    email = registration_payload["email"]
+    team_id = registration_payload["teamId"]
+    username = registration_payload["username"]
+    registration_time = registration_payload["registrationTime"]
 
     ddb.put_item(TableName=event["RegistrantsTable"],
                  Item={
@@ -60,6 +173,9 @@ def post(event, contest):
                          "N": str(team_id)
                      },
                      "registrationTime": {
+                         "N": repr(registration_time)
+                     },
+                     "confirmationTime": {
                          "N": repr(time.time())
                      }
                  })
@@ -96,11 +212,9 @@ def post(event, contest):
             }
         </style>
 
-
     </head>
     <body class="vscode-light">
         <h1 id="ctf-registration">CTF Registration</h1>
-<!-- You can use Markdown to craft your welcome emails, and then render it to HTML and use it as the body in `Register.py` -->
 <p>Congratulations %s! You've signed up for our CTF, The Big Kahuna CTF!</p>
 <ul>
 <li>When submitting your flags, your team ID is %d and you will show up as &quot;%s&quot; on the scores list</li>
@@ -138,4 +252,7 @@ def lambda_handler(event, context):
     if event["Method"] == "POST":
         return post(event, context)
     elif event["Method"] == "GET":
-        return get(event, context)
+        if event.get("confirmation_token", "") != "":
+            return get_confirm(event, context)
+        else:
+            return get(event, context)

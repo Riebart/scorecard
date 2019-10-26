@@ -67,6 +67,9 @@ Parameters:
   SESEmailSource:
     Description: Email address (must be validated within SES) to send emails from
     Type: String
+  HMACSecret:
+    Description: String that is used as the secret key for the HMAC to validate emails during registration.
+    Type: String
 
 Conditions:
   TallyCodePlaceholder:
@@ -334,7 +337,8 @@ Resources:
                 "RegistrantsTable": "${RegistrantsTable}",
                 "KeyValueBackend": "${KeyValueBackend}",
                 "ScoreCacheLifetime": "${ScoreCacheLifetime}",
-                "FlagCacheLifetime": "${FlagCacheLifetime}"
+                "FlagCacheLifetime": "${FlagCacheLifetime}",
+                "confirmation_token": "$input.params('confirmation_token')"
               }
   RegisterOptions:
     Type: AWS::ApiGateway::Method
@@ -434,6 +438,8 @@ Resources:
           XraySampleRate: !Ref XraySampleRate
           SCORECARD_LOG_EVENTS: "TRUE"
           SES_REGION: !Ref SESRegion
+          HMAC_SECRET: !Ref HMACSecret
+          API_URL: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/Main
       Runtime: python3.6
       Handler: Register.lambda_handler
       Code:
