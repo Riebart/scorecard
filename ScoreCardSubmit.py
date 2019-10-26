@@ -8,12 +8,15 @@ from __future__ import print_function
 import os
 import json
 import time
+import re
 from decimal import Decimal
 from datetime import datetime
 
 import boto3
 from S3KeyValueStore import Table as S3Table
 from util import traced_lambda
+
+ddb = boto3.client("dynamodb")
 
 BACKEND_TYPE = None
 # Cache the table backends, as appropriate.
@@ -79,6 +82,12 @@ def update_flag_data(chain):
     return FLAGS_DATA['flags']
 
 
+def team_id_from_email(email, table):
+    item = ddb.get_item(TableName=table, Key={"email": {"S": email}})
+    id_str = item.get("Item", dict()).get("teamId", dict()).get("N", None)
+    return int(id_str) if id_str is not None else None
+
+
 @traced_lambda("ScorecardSubmit")
 def lambda_handler(event, context, chain=None):
     """
@@ -124,7 +133,11 @@ def lambda_handler(event, context, chain=None):
 
     # The team is either an integer or None after this block.
     try:
-        event['team'] = int(event['team'])
+        if re.match("^[^@]+@[^@]+\\.[^@]+$", event["team"]) is not None:
+            event["team"] = team_id_from_email(event["team"],
+                                               event["RegistrantsTable"])
+        else:
+            event['team'] = int(event['team'])
     except ValueError:
         event['team'] = None
     except KeyError:
@@ -132,8 +145,9 @@ def lambda_handler(event, context, chain=None):
 
     if event['team'] is None:
         response['client_error'] = [
-            '"team" key must exist and be integeral or parsable as integral'
+            '"team" key must exist and be integeral or parsable as integral or a registered email address'
         ]
+        response["error"] = "invalid_submitter"
 
     if 'flag' not in event:
         if 'client_error' in response:

@@ -23,10 +23,6 @@ myApp.controller('submissionController', ['$scope', '$rootScope', '$resource', '
             $scope.submission_status = 'failure';
             return false;
         }
-        if (isNaN(parseInt($scope.teamText))) {
-            $scope.submission_status = 'failure_parse';
-            return false;
-        }
 
         $scope.submitting = true;
         $scope.FlagResource.save({
@@ -39,6 +35,11 @@ myApp.controller('submissionController', ['$scope', '$rootScope', '$resource', '
                 }
                 else {
                     $scope.submission_status = 'invalid';
+                }
+            }
+            else if ('client_error' in response) {
+                if (response.error == "invalid_submitter") {
+                    $scope.submission_status = "invalid_submitter";
                 }
             }
             $scope.submitting = false;

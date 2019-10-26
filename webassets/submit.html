@@ -70,6 +70,10 @@
             <div ng-show="submission_status == 'failure_parse'">
                 <label style="float:center;color:darkred">Team must be an integer.</label>
             </div>
+            <div ng-show="submission_status == 'invalid_submitter'">
+                <label style="float:center;color:darkred">Invalid team ID or email address (email may not be
+                    registered)</label>
+            </div>
         </div>
     </div>
 </body>

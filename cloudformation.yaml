@@ -158,6 +158,7 @@ Resources:
               {
                 "ScoresTable": "${ScoresTable}",
                 "FlagsTable": "${FlagsTable}",
+                "RegistrantsTable": "${RegistrantsTable}",
                 "KeyValueBackend": "${KeyValueBackend}",
                 "ScoreCacheLifetime": "${ScoreCacheLifetime}",
                 "FlagCacheLifetime": "${FlagCacheLifetime}",
@@ -571,6 +572,10 @@ Resources:
                 Effect: Allow
                 Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FlagsTable}
               - Action:
+                - dynamodb:GetItem
+                Effect: Allow
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RegistrantsTable}
+              - Action:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
                 Effect: Allow
@@ -598,7 +603,6 @@ Resources:
           PolicyDocument:
             Statement:
               - Action:
-                  - dynamodb:UpdateItem
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:Scan
@@ -608,6 +612,9 @@ Resources:
                 - ses:sendEmail
                 Effect: Allow
                 Resource: '*'
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !Ref SESEmailSource
               - Action:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
