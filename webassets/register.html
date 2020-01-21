@@ -75,6 +75,9 @@
             <div ng-show="submission_status == 'failed_duplicate'">
                 <label style="float:center;color:darkorange">Username already exists.</label>
             </div>
+            <div ng-show="submission_status == 'failed_unknown'">
+                <label style="float:center;color:darkmagenta">Unknown error encountered.</label>
+            </div>
         </div>
     </div>
 </body>

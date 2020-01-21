@@ -92,6 +92,16 @@ def main():
         help=
         """A list of tags as a dict to use as tag keys and values for the CloudFormation stack."""
     )
+    parser.add_argument(
+        "--registration-mode",
+        required=False,
+        default="Open",
+        type=lambda v: {k:k for k in ["Open", "Closed"]}[v],
+        help="""
+        Determines whether to permit registration from emails that aren't already in the DB.
+        This does not exempt registrants from confirming their email address, as we still need to
+        know that we can contact them at that address."""
+    )
     pargs = parser.parse_args()
 
     if pargs.registration_email_source is not None and pargs.hmac_secret is None:
@@ -110,17 +120,17 @@ def main():
                 exit(2)
 
     print("Building code zip files for deployment...")
-    tally_code = (str(uuid.uuid1()),
+    tally_code = (str(uuid.uuid4()),
                   zip_files([
                       "ScoreCardTally.py", "S3KeyValueStore.py",
                       "XrayChain.py", "util.py"
                   ]))
-    submit_code = (str(uuid.uuid1()),
+    submit_code = (str(uuid.uuid4()),
                    zip_files([
                        "ScoreCardSubmit.py", "S3KeyValueStore.py",
                        "XrayChain.py", "util.py"
                    ]))
-    register_code = (str(uuid.uuid1()),
+    register_code = (str(uuid.uuid4()),
                      zip_files(["Register.py", "XrayChain.py", "util.py"]))
 
     print("Uploading code zip files to S3 bucket (%s)..." % pargs.code_bucket)
@@ -149,6 +159,12 @@ def main():
         stack_params.append({
             "ParameterKey": "SESEmailSource",
             "ParameterValue": pargs.registration_email_source
+        })
+
+    if pargs.registration_mode is not None:
+        stack_params.append({
+            "ParameterKey": "RegistrationMode",
+            "ParameterValue": pargs.registration_mode
         })
 
     if pargs.hmac_secret is not None:

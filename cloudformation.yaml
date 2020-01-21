@@ -70,6 +70,14 @@ Parameters:
   HMACSecret:
     Description: String that is used as the secret key for the HMAC to validate emails during registration.
     Type: String
+  RegistrationMode:
+    Description: Determines whether to permit registration from emails that aren't already in the DB.
+      This does not exempt registrants from confirming their email address, as we still need to know that
+      we can contact them at that address.
+    Type: String
+    AllowedValues:
+      - Open
+      - Closed
 
 Conditions:
   TallyCodePlaceholder:
@@ -438,8 +446,10 @@ Resources:
         Variables:
           XraySampleRate: !Ref XraySampleRate
           SCORECARD_LOG_EVENTS: "TRUE"
+          SES_EMAIL_SOURCE: !Ref SESEmailSource
           SES_REGION: !Ref SESRegion
           HMAC_SECRET: !Ref HMACSecret
+          REGISTRATION_MODE: !Ref RegistrationMode
           API_URL: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/Main
       Runtime: python3.6
       Handler: Register.lambda_handler
