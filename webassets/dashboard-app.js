@@ -51,6 +51,11 @@ myApp.controller('scoreboardController', ['$scope', '$rootScope', '$resource', '
             $scope.ScoresResource.get({
                 team: team_id.toString()
             }, function (score) {
+                score.bitmask.sort(function (a, b) {
+                    if (a.nickname < b.nickname) return -1;
+                    if (a.nickname > b.nickname) return 1;
+                    return 0;
+                });
                 $scope.scoresBack[score.team] = {
                     id: score.team,
                     name: $scope.team_names[score.team],
