@@ -103,7 +103,8 @@ def post(event, contest):
             # have one from the table already, use that.
             if REGISTRATION_MODE == "closed":
                 team_id = int(item["Item"].get("team_id", {"N": team_id})["N"])
-                display_name = item["Item"].get("display_name", username)["S"]
+                display_name = item["Item"].get("display_name",
+                                                {"S": username})["S"]
             else:  # REGISTRATION_MODE == "open", or any other value.
                 pass
     else:
@@ -124,7 +125,8 @@ def post(event, contest):
     confirmation_token = sign_payload(json.dumps(confirmation_payload))
 
     ses.send_email(Destination={"ToAddresses": [email]},
-                   Source="CTF Registration <%s>" % os.environ["SES_EMAIL_SOURCE"],
+                   Source="CTF Registration <%s>" %
+                   os.environ["SES_EMAIL_SOURCE"],
                    Message={
                        "Subject": {
                            "Data": "CTF Registration - Confirm your email"
@@ -215,7 +217,8 @@ def get_confirm(event, context):
                  })
 
     ses.send_email(Destination={"ToAddresses": [email]},
-                   Source="CTF Registration <%s>" % os.environ["SES_EMAIL_SOURCE"],
+                   Source="CTF Registration <%s>" %
+                   os.environ["SES_EMAIL_SOURCE"],
                    Message={
                        "Subject": {
                            "Data": "CTF Registration - Complete!"
@@ -230,9 +233,9 @@ def get_confirm(event, context):
     <html>
 
 <body>
-    <h1>Welcome to the 2019 CCDC event!</h1>
+    <h1>Welcome to the 2021 CCDC event!</h1>
     <p>To get you started, here's some important information and references. <ul>
-            <li>Your team name is "{display_name}"", and we have auto-generated a team ID for your team.</li>
+            <li>Your team name is "{display_name}", and we have auto-generated a team ID for your team.</li>
             <li>Your team ID is {team_id}</li>
             <li>You'll need this team ID when submitting flags, <i>don't lose this</i>! To submit flags, you will need
                 to use the <a href="https://ccdc.zone/scores/submit">flag submission page</a>. </li>
@@ -240,9 +243,11 @@ def get_confirm(event, context):
             <li>This team ID is unique to your team, so don't share it with members of other teams.</li>
         </ul>
     </p>
-    <p>Your team has been allocated an environment for today, complete with targets, as well as VMs for you to remote
-        into that will contain all of the tools you will need today. You can find your team's starting package <a
-            href="https://ccdc.zone/packages/{team_id}.zip">here</a>. <ul>
+    <p>Your team has been allocated an environment for the event, complete with targets, as well as VMs for you to remote
+        into that will contain all of the tools you will need during the event. When the event starts, you will be able to retrieve your team's starting package <a
+            href="https://ccdc.zone/packages/{team_id}.zip">here</a>. This package will not be available until the event starts.
+
+            <ul>
             <li>This package contains passwords, private keys, hostnames, and other information to get you and your
                 teammates started.</li>
             <li>Inside of the zip package, you'll see a few files that start with the word `jumpbox`. These files
@@ -262,8 +267,8 @@ def get_confirm(event, context):
                     remote desktop client</a>.</li>
         </ul>
     </p>
-    <p> This should be enough to get you started, but you will need to read the <a href="https://ccdc.zone/documentation">official
-            complete documentation</a> for all of the information you will need to be successful today. </p>
+    <p> This should be enough to get you started, but you will need to read the <a href="https://discord.com/channels/821919947563335700/833046632010088478">official
+            documentation Discord channel</a> for all of the information you will need to be successful in the event. </p>
     <h2>Keep your email inbox open or notifications turned on, as we may be sending updates, hints, and notifications to
         you by email throughout the day.</h2>
 
@@ -279,11 +284,14 @@ def get_confirm(event, context):
 
 def get(event, contest):
     items = ddb.scan(TableName=event["RegistrantsTable"])
-    pairs = set([(item["teamId"]["N"], item["display_name"]["S"]) for item in items.get("Items", [])])
-    return [{
-        "team_id": t[0],
-        "team_name": t[1]
-    } for t in pairs]
+    pairs = set()
+    for item in items.get("Items", []):
+        if "teamId" in item and "display_name" in item:
+            pairs.add((item["teamId"]["N"], item["display_name"]["S"]))
+
+    # pairs = set([(item["teamId"]["N"], item["display_name"]["S"])
+    #              for item in items.get("Items", [])])
+    return [{"team_id": t[0], "team_name": t[1]} for t in pairs]
 
 
 def lambda_handler(event, context):

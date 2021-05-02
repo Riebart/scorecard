@@ -86,6 +86,62 @@ Once the backend has been deployed, copy the `constants.js.example` file to `con
 - submit.html
 - register.html
 
+Deploying the files using the AWS CLI could look like this:
+
+```bash
+$ cd webassets
+$ aws s3 cp --recursive ./ s3://example-bucket/scores/
+upload: ./constants.js to s3://example-bucket/scores/constants.js
+upload: ./dashboard-app.js to s3://example-bucket/scores/dashboard-app.js
+upload: ./dashboard.html to s3://example-bucket/scores/dashboard.html
+upload: ./constants.js.example to s3://example-bucket/scores/constants.js.example
+upload: favicon/favicon.ico to s3://example-bucket/scores/favicon/favicon.ico
+upload: favicon/favicon-16x16.png to s3://example-bucket/scores/favicon/favicon-16x16.png
+upload: favicon/browserconfig.xml to s3://example-bucket/scores/favicon/browserconfig.xml
+upload: favicon/favicon.png to s3://example-bucket/scores/favicon/favicon.png
+upload: favicon/favicon-32x32.png to s3://example-bucket/scores/favicon/favicon-32x32.png
+upload: favicon/apple-touch-icon.png to s3://example-bucket/scores/favicon/apple-touch-icon.png
+upload: favicon/safari-pinned-tab.svg to s3://example-bucket/scores/favicon/safari-pinned-tab.svg
+upload: favicon/android-chrome-192x192.png to s3://example-bucket/scores/favicon/android-chrome-192x192.png
+upload: favicon/android-chrome-256x256.png to s3://example-bucket/scores/favicon/android-chrome-256x256.png
+upload: favicon/mstile-150x150.png to s3://example-bucket/scores/favicon/mstile-150x150.png
+upload: favicon/site.webmanifest to s3://example-bucket/scores/favicon/site.webmanifest
+upload: ./register-app.js to s3://example-bucket/scores/register-app.js
+upload: ./register.html to s3://example-bucket/scores/register.html
+upload: ./submit-app.js to s3://example-bucket/scores/submit-app.js
+upload: ./submit.html to s3://example-bucket/scores/submit.html
+upload: ./teams.json to s3://example-bucket/scores/teams.json
+upload: favicon/source.png to s3://example-bucket/scores/favicon/source.png
+upload: ./teams.json.example to s3://example-bucket/scores/teams.json.example
+upload: ./ws.html to s3://example-bucket/scores/ws.html
+
+$ for f in *.html; do aws s3 cp "$f" s3://example-bucket/scores/$(echo "$f" | cut -d '.' -f1); done
+upload: ./dashboard.html to s3://example-bucket/scores/dashboard
+upload: ./register.html to s3://example-bucket/scores/register
+upload: ./submit.html to s3://example-bucket/scores/submit
+upload: ./ws.html to s3://example-bucket/scores/ws
+```
+
+## Quickstart: Registration
+
+This scoring system supports registration in one of two modes: Open and Closed.
+
+Open registration permits registration from anyone that can provide an email address. A confirmation email is sent to the email address, and upon using the confirmation link in the email, a welcome email is sent back with a unique team ID. The user does not provide credentials, only a contact method.
+
+With Closed registration, the registrants table must be manually prepopulated (no script is provided, so DynamoDB entries will need to be created either via web UI, or a simple script left as an exercise for the reader). Specifically, any registration attempted with an email not in the registrants table _already_ will be rejected. Pre-populated items in the table need not contain a team ID and if one is not present one will be generated; however if one is present it will be respected in the response welcome email.
+
+For simplicity, if the email addresses of valid participants are contained, one per line, in `participants.csv`, then a possible bash one-liner to populate the participants table could be:
+
+```bash
+cat participants.csv | while read email
+do
+  aws dynamodb put-item --table-name "ParticipantsTable-00000" \
+    --item "{\"email\": {\"S\": \"$email\"}}"
+done
+```
+
+For large participants lists `batch-write-item` is better, however `put-item` was used above as it is more expressive.
+
 ## Requirements and Specifications
 
 The requirements for this scoring engine, and hence the target use case, are the following.

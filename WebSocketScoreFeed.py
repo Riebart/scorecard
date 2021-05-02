@@ -259,15 +259,30 @@ if __name__ == "__main__":
 
     parser.add_argument("--teams",
                         type=json_int_list,
-                        required=True,
-                        default=list(),
+                        required=False,
+                        default=None,
                         help="""List of team IDs to poll for scores.""")
 
+    parser.add_argument(
+        "--teams-url",
+        type=str,
+        required=False,
+        default=None,
+        help=
+        """URL to fetch periodically to get the list of teams to poll for scores."""
+    )
+
     parsed_args = parser.parse_args()
+
+    if parsed_args.teams is None and parsed_args.teams_url is None:
+        print("Either --teams or --teams-url must be specified.",
+              file=sys.stderr)
+        exit(1)
 
     if parsed_args.ssl and (parsed_args.ssl_cert is None
                             or parsed_args.ssl_key is None):
         print("Cannot enable SSL without both a certificate and a key",
               file=sys.stderr)
+        exit(1)
 
     __main(parsed_args)

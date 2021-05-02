@@ -1,2 +1,3 @@
-var API_ENDPOINT = 'https://**********.execute-api.us-east-1.amazonaws.com/Main';
+var API_ENDPOINT = "https://**********.execute-api.us-east-1.amazonaws.com/Main";
+var TEAMS_JSON_SOURCE = "https://**********.execute-api.us-east-1.amazonaws.com/Main/register";
 var TEAMS_JSON_SOURCE = "teams.json";
