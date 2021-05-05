@@ -54,7 +54,7 @@ def post(event, contest):
     username = None
 
     try:
-        email = event["email"]
+        email = event["email"].lower()
     except:
         return {"result": "failure"}
 
@@ -102,7 +102,7 @@ def post(event, contest):
             # For closed registration, they needn't have a team ID, but they might, so if they do
             # have one from the table already, use that.
             if REGISTRATION_MODE == "closed":
-                team_id = int(item["Item"].get("team_id", {"N": team_id})["N"])
+                team_id = int(item["Item"].get("teamId", {"N": team_id})["N"])
                 display_name = item["Item"].get("display_name",
                                                 {"S": username})["S"]
             else:  # REGISTRATION_MODE == "open", or any other value.

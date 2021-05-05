@@ -227,7 +227,9 @@ def lambda_handler(event, context, chain=None):
                                                                 sim_time)
         scores.append([
             flag["flag"], flag_score,
-            flag.get("nickname", "NONICK: %s" % flag["flag"])
+            flag.get(
+                "nickname",
+                "NONICK: %s" % hashlib.sha256(flag["flag"]).hexdigest()[:8])
         ])
         if flag_score is not None:
             score += float(flag_score)
